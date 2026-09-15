@@ -1,0 +1,33 @@
+project:
+  name: smart-sales-forecasting-system
+  target: Quantity
+  frequency: daily
+
+data:
+  path: data/processed_daily_forecasting_features.csv
+  date_column: Date
+
+split:
+  train_end: 2023-12-31
+  validation_start: 2024-01-01
+  validation_end: 2024-12-31
+  test_start: 2025-01-01
+
+forecast:
+  horizons: [7, 30, 90]
+  seasonal_period: 7
+
+production_models:
+  "7":
+    name: random_forest
+    artifact: ml/artifacts/demand_7d_random_forest.joblib
+  "30":
+    name: hist_gradient_boosting
+    artifact: ml/artifacts/demand_30d_gradient_boosting.joblib
+  "90":
+    name: linear_regression
+    artifact: ml/artifacts/demand_90d_linear_regression.joblib
+
+experimental_models:
+  lstm:
+    artifact: ml/artifacts/sales_demand_lstm.keras

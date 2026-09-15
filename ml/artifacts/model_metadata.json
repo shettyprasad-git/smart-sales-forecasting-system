@@ -1,0 +1,49 @@
+{
+  "target": "Quantity",
+  "reference_start_date": "2018-01-29",
+  "training_start": "2018-02-26",
+  "training_end": "2023-12-31",
+  "validation_start": "2024-01-01",
+  "validation_end": "2024-12-31",
+  "test_start": "2025-01-01",
+  "test_end": "2025-12-31",
+  "feature_count": 19,
+  "features": [
+    "day_of_week",
+    "day_of_month",
+    "week_of_year",
+    "month",
+    "quarter",
+    "is_weekend",
+    "days_since_start",
+    "quantity_lag_1",
+    "quantity_lag_7",
+    "quantity_lag_14",
+    "quantity_lag_28",
+    "quantity_rolling_mean_7",
+    "quantity_rolling_std_7",
+    "quantity_rolling_mean_14",
+    "quantity_rolling_std_14",
+    "quantity_rolling_mean_28",
+    "quantity_rolling_std_28",
+    "Promotions",
+    "Holiday_Flag"
+  ],
+  "models": {
+    "7": {
+      "model_name": "Random Forest",
+      "artifact": "demand_7d_random_forest.joblib",
+      "reference_start_date": "2018-01-29"
+    },
+    "30": {
+      "model_name": "HistGradientBoosting",
+      "artifact": "demand_30d_gradient_boosting.joblib",
+      "reference_start_date": "2018-01-29"
+    },
+    "90": {
+      "model_name": "Linear Regression",
+      "artifact": "demand_90d_linear_regression.joblib",
+      "reference_start_date": "2018-01-29"
+    }
+  }
+}

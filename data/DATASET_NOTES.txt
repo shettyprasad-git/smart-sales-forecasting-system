@@ -1,0 +1,6 @@
+SMART SALES FORECASTING DATASET
+
+The uploaded original sales data remains the source/base dataset.
+These synthetic forecasting files reuse its product/category catalog but create an independent daily demand environment from 2018-01-01 through 2025-12-31.
+
+Synthetic fields include Quantity, Promotion, Discount_Percent, Is_Holiday, Current_Inventory, Supplier_Lead_Time_Days and Reorder_Point. They are generated for ML/forecasting demonstration and must be labeled SYNTHETIC in the project.
