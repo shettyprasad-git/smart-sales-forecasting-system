@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-44%2F44%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-61%2F61%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -98,6 +98,17 @@ This project addresses the problem by building a complete forecasting pipeline t
 - Peak and lowest predicted demand
 - Forecast period demand
 
+## Sales Anomaly Detection (Phase 6.1)
+
+- Causal rolling historical baselines (strict chronological lookback, zero future data leakage)
+- Robust statistical scoring using rolling Median and Median Absolute Deviation (MAD × 1.4826)
+- Multi-metric outlier detection (Daily Quantity and Daily Sales Revenue)
+- Flexible granularity: Aggregate System Sales, Category-level, and Product-level detection
+- Statistically grounded severity classification (Low, Medium, High, Critical based on standard normal tail probabilities)
+- Directional anomaly tracking (Spikes vs Drops with absolute & percentage deviations)
+- Contextual, interpretable natural language explanations accounting for promotions and holidays
+- Dedicated React Anomaly Insights UI with interactive KPI telemetry, multi-dimensional filters, and paginated records
+
 ## Full-Stack Application
 
 - User registration
@@ -132,6 +143,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Products            │
                          │ Sales               │
                          │ Forecast            │
+                         │ Anomaly Insights    │
                          └──────────┬──────────┘
                                     │
                               REST / JSON
@@ -144,16 +156,17 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Products API        │
                          │ Sales API           │
                          │ Forecast API        │
+                         │ Anomalies API       │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
                     ▼                               ▼
           ┌─────────────────┐             ┌──────────────────┐
-          │    Database     │             │  ML Forecasting  │
+          │    Database     │             │ ML & Intelligence│
           │                 │             │                  │
-          │ Users           │             │ Random Forest    │
-          │ Products        │             │ Gradient Boost.  │
-          │ Sales Records   │             │ Linear Regression│
+          │ Users           │             │ Forecast Models  │
+          │ Products        │             │ Anomaly Engine   │
+          │ Sales Records   │             │ (Median + MAD)   │
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -1041,7 +1054,7 @@ http://localhost:5173
 
 # Testing
 
-The backend contains automated API tests covering:
+The backend contains automated API and statistical tests covering:
 
 - Authentication
 - Registration
@@ -1053,6 +1066,11 @@ The backend contains automated API tests covering:
 - Forecast generation
 - Historical data
 - Dashboard
+- Sales Anomaly Detection (Median + MAD robust baseline)
+- Causal time-series invariance (zero future data leakage)
+- Synthetic spike and drop detection
+- Severity, metric, date, and direction filtering
+- Category and product-level anomaly endpoints
 - Validation
 - Error handling
 
@@ -1065,7 +1083,7 @@ pytest -q
 Current result:
 
 ```text
-44 passed
+61 passed
 ```
 
 The remaining warnings are dependency-level FastAPI/Starlette/AnyIO warnings and do not represent application test failures.
@@ -1105,9 +1123,12 @@ The production build currently completes successfully.
 - [x] 30-day forecast works
 - [x] 90-day forecast works
 - [x] Dashboard API works
+- [x] Sales Anomaly Detection API (`/api/anomalies`)
+- [x] Causal rolling baseline without lookahead leakage
+- [x] Category and Product anomaly queries
 - [x] Validation works
 - [x] Error handling works
-- [x] 44/44 tests passing
+- [x] 61/61 tests passing
 
 ## Frontend
 
@@ -1122,6 +1143,7 @@ The production build currently completes successfully.
 - [x] Products CRUD
 - [x] Sales CRUD
 - [x] Forecast page
+- [x] Anomaly Insights page (`/anomalies`)
 - [x] Responsive layout
 - [x] Loading states
 - [x] Error states
