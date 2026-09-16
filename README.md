@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-74%2F74%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-88%2F88%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -120,6 +120,23 @@ This project addresses the problem by building a complete forecasting pipeline t
 - Deterministic narrative synthesis without external black-box LLM dependencies
 - Explicit observational disclaimer: Identifies statistically associated contributors and supporting evidence; does not establish causal relationships from observational sales data
 
+## Sales Anomaly Explanation & Executive Narrative Reporting (Phase 6.3)
+
+- **Purpose**: Converts structured multi-dimensional investigation evidence into deterministic, executive-ready narrative briefings for leadership and stakeholders.
+- **Deterministic Explanation Engine**: 100% reproducible template-driven engine operating without external LLM dependencies, ensuring zero hallucination risk and consistent mathematical phrasing.
+- **Structured Narrative Sections**:
+  - *Executive Headline*: Concise 1-sentence summary of metric, deviation percentage, direction, and date.
+  - *What Happened*: Detailed breakdown of actual vs expected 28-day baseline, net deviation, severity, and anomaly score.
+  - *Why It Matters*: Executive interpretation of business impact, translating units to potential revenue with documented price basis assumptions.
+  - *Key Contributors*: Top evidence-backed driver summaries with observed vs reference values, deviation percentage, contribution share, and confidence grade.
+  - *Event & Calendar Context*: Factual alignment with active promotional campaigns or recognized holiday dates.
+  - *Trend & Drift Context*: 7-day pre-anomaly drift assessment evaluating whether the anomaly followed a rising, falling, or stable demand trajectory.
+  - *Evidence Quality & Confidence*: Synthesized overall confidence assessment (High, Medium, Low) based on empirical sample depth and driver corroboration.
+  - *Methodological Limitations*: Explicit disclaimers regarding observational attribution, absence of counterfactual causality, and lookback window assumptions.
+- **Evidence Prioritization Rules**: Selects up to top-$N$ (default 3) primary drivers prioritized by contribution magnitude, confidence weighting, and directional alignment with the anomaly.
+- **Interactive UI with 1-Click Clipboard Export**: Features an "Executive Brief" view within the Investigation Drawer and a "Copy Brief" action providing clean Markdown formatting.
+- **API Endpoint**: `GET /api/explanations/{anomaly_id}` supporting `top_n` and `format` query parameters.
+
 ## Full-Stack Application
 
 - User registration
@@ -156,6 +173,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Forecast            │
                          │ Anomaly Insights    │
                          │ Investigation Drawer│
+                         │ Executive Brief     │
                          └──────────┬──────────┘
                                     │
                               REST / JSON
@@ -170,6 +188,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Forecast API        │
                          │ Anomalies API       │
                          │ Investigations API  │
+                         │ Explanations API    │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
@@ -180,6 +199,7 @@ This project addresses the problem by building a complete forecasting pipeline t
           │ Users           │             │ Forecast Models  │
           │ Products        │             │ Anomaly Engine   │
           │ Sales Records   │             │ Root-Cause Engine│
+          │                 │             │ Narrative Engine │
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -1081,9 +1101,13 @@ The backend contains automated API and statistical tests covering:
 - Dashboard
 - Sales Anomaly Detection (Median + MAD robust baseline)
 - Sales Anomaly Root-Cause Investigation (`/api/investigations/{id}`)
+- Sales Anomaly Executive Narrative Explanation (`/api/explanations/{id}`)
+- Deterministic template-driven narrative generation (Headline, What Happened, Why It Matters, Key Contributors)
+- Event, calendar, and pre-anomaly drift context reporting
 - Multi-dimensional driver decomposition (Promotions, Holidays, Categories, Products, Prices, Discounts, Drift)
 - Financial & demand impact quantification with price basis documentation
 - Causal time-series invariance (zero future data leakage)
+- Deterministic reproducibility (byte-for-byte consistency across multiple invocations)
 - Synthetic spike and drop detection
 - Severity, metric, date, and direction filtering
 - Category and product-level anomaly endpoints
@@ -1099,7 +1123,7 @@ pytest -q
 Current result:
 
 ```text
-74 passed
+88 passed
 ```
 
 The remaining warnings are dependency-level FastAPI/Starlette/AnyIO warnings and do not represent application test failures.
@@ -1141,12 +1165,15 @@ The production build currently completes successfully.
 - [x] Dashboard API works
 - [x] Sales Anomaly Detection API (`/api/anomalies`)
 - [x] Sales Anomaly Investigation API (`/api/investigations/{id}`)
+- [x] Executive Narrative Explanation API (`/api/explanations/{id}`)
 - [x] Multi-driver root-cause decomposition without lookahead leakage
 - [x] Category and Product anomaly queries & contributions
 - [x] Quantified business impact estimation
+- [x] Deterministic narrative generation without LLM
+- [x] Key driver prioritization & top-N capping
 - [x] Validation works
 - [x] Error handling works
-- [x] 74/74 tests passing
+- [x] 88/88 tests passing
 
 ## Frontend
 
@@ -1163,6 +1190,7 @@ The production build currently completes successfully.
 - [x] Forecast page
 - [x] Anomaly Insights page (`/anomalies`)
 - [x] Investigation Drawer with driver ranking & evidence
+- [x] Executive Brief drawer tab & 1-click Markdown clipboard export
 - [x] Responsive layout
 - [x] Loading states
 - [x] Error states
