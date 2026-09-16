@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.anomalies import router as anomalies_router
 from backend.app.api.auth import router as auth_router
 from backend.app.api.forecast import router as forecast_router
+from backend.app.api.investigations import router as investigations_router
 from backend.app.api.products import router as products_router
 from backend.app.api.sales import router as sales_router
 from backend.app.core.exceptions import global_exception_handler
@@ -92,6 +93,7 @@ async def log_requests(
 
 
 app.include_router(anomalies_router)
+app.include_router(investigations_router)
 app.include_router(auth_router)
 app.include_router(forecast_router)
 app.include_router(products_router)

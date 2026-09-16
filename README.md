@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-61%2F61%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-74%2F74%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -109,6 +109,17 @@ This project addresses the problem by building a complete forecasting pipeline t
 - Contextual, interpretable natural language explanations accounting for promotions and holidays
 - Dedicated React Anomaly Insights UI with interactive KPI telemetry, multi-dimensional filters, and paginated records
 
+## Sales Anomaly Investigation & Root-Cause Attribution (Phase 6.2)
+
+- Multi-dimensional root-cause attribution: Promotion, Holiday, Category, Product, Price, Discount, and Trend Drift
+- Empirical decomposition attributing aggregate deviations to specific categories and products
+- Quantified business impact: Excess demand / deficit volume, potential revenue gap / excess revenue, with documented price basis assumptions
+- Evidence confidence grading: Transparent confidence classification (High, Medium, Low) based on historical sample size and consistency
+- Strict causal invariance: All reference baselines and event metrics use data strictly prior to the anomaly date (t < T)
+- Interactive slide-over Investigation Drawer integrated directly into the `/anomalies` table
+- Deterministic narrative synthesis without external black-box LLM dependencies
+- Explicit observational disclaimer: Identifies statistically associated contributors and supporting evidence; does not establish causal relationships from observational sales data
+
 ## Full-Stack Application
 
 - User registration
@@ -144,6 +155,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Sales               │
                          │ Forecast            │
                          │ Anomaly Insights    │
+                         │ Investigation Drawer│
                          └──────────┬──────────┘
                                     │
                               REST / JSON
@@ -157,6 +169,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Sales API           │
                          │ Forecast API        │
                          │ Anomalies API       │
+                         │ Investigations API  │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
@@ -166,7 +179,7 @@ This project addresses the problem by building a complete forecasting pipeline t
           │                 │             │                  │
           │ Users           │             │ Forecast Models  │
           │ Products        │             │ Anomaly Engine   │
-          │ Sales Records   │             │ (Median + MAD)   │
+          │ Sales Records   │             │ Root-Cause Engine│
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -1067,6 +1080,9 @@ The backend contains automated API and statistical tests covering:
 - Historical data
 - Dashboard
 - Sales Anomaly Detection (Median + MAD robust baseline)
+- Sales Anomaly Root-Cause Investigation (`/api/investigations/{id}`)
+- Multi-dimensional driver decomposition (Promotions, Holidays, Categories, Products, Prices, Discounts, Drift)
+- Financial & demand impact quantification with price basis documentation
 - Causal time-series invariance (zero future data leakage)
 - Synthetic spike and drop detection
 - Severity, metric, date, and direction filtering
@@ -1083,7 +1099,7 @@ pytest -q
 Current result:
 
 ```text
-61 passed
+74 passed
 ```
 
 The remaining warnings are dependency-level FastAPI/Starlette/AnyIO warnings and do not represent application test failures.
@@ -1124,11 +1140,13 @@ The production build currently completes successfully.
 - [x] 90-day forecast works
 - [x] Dashboard API works
 - [x] Sales Anomaly Detection API (`/api/anomalies`)
-- [x] Causal rolling baseline without lookahead leakage
-- [x] Category and Product anomaly queries
+- [x] Sales Anomaly Investigation API (`/api/investigations/{id}`)
+- [x] Multi-driver root-cause decomposition without lookahead leakage
+- [x] Category and Product anomaly queries & contributions
+- [x] Quantified business impact estimation
 - [x] Validation works
 - [x] Error handling works
-- [x] 61/61 tests passing
+- [x] 74/74 tests passing
 
 ## Frontend
 
@@ -1144,6 +1162,7 @@ The production build currently completes successfully.
 - [x] Sales CRUD
 - [x] Forecast page
 - [x] Anomaly Insights page (`/anomalies`)
+- [x] Investigation Drawer with driver ranking & evidence
 - [x] Responsive layout
 - [x] Loading states
 - [x] Error states

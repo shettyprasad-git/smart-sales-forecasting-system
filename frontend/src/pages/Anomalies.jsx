@@ -4,6 +4,7 @@ import { extractErrorMessage } from '../api/axios';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import EmptyState from '../components/EmptyState';
+import InvestigationDrawer from '../components/InvestigationDrawer';
 import {
   AlertTriangle,
   ShieldAlert,
@@ -15,6 +16,7 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 import {
   formatCurrency,
@@ -57,6 +59,7 @@ const Anomalies = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [anomaliesData, setAnomaliesData] = useState(null);
+  const [selectedAnomalyId, setSelectedAnomalyId] = useState(null);
 
   // Filter states
   const [metricFilter, setMetricFilter] = useState('');
@@ -388,6 +391,7 @@ const Anomalies = () => {
                       <th className="py-3 px-4 text-right">Deviation</th>
                       <th className="py-3 px-4 text-right">Anomaly Score</th>
                       <th className="py-3 px-4 max-w-xs">Explanation</th>
+                      <th className="py-3 px-4 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -478,6 +482,16 @@ const Anomalies = () => {
                               {row.explanation}
                             </div>
                           </td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <button
+                              onClick={() => setSelectedAnomalyId(row.id)}
+                              className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-indigo-600 text-[11px] font-semibold transition-all cursor-pointer shadow-xs"
+                              title="Investigate root causes and driver attribution"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                              <span>Investigate</span>
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -517,6 +531,13 @@ const Anomalies = () => {
           </>
         )}
       </div>
+
+      {/* Root-Cause Investigation Drawer / Modal */}
+      <InvestigationDrawer
+        anomalyId={selectedAnomalyId}
+        isOpen={Boolean(selectedAnomalyId)}
+        onClose={() => setSelectedAnomalyId(null)}
+      />
     </div>
   );
 };
