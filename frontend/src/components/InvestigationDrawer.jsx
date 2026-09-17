@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getInvestigationApi } from '../api/investigations';
 import { getExplanationApi } from '../api/explanations';
+import { getAIReasoningApi } from '../api/aiReasoning';
 import { extractErrorMessage } from '../api/axios';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -22,6 +23,10 @@ import {
   Copy,
   Check,
   ShieldCheck,
+  BrainCircuit,
+  RotateCw,
+  AlertTriangle,
+  Lightbulb,
 } from 'lucide-react';
 import {
   formatCurrency,
@@ -65,7 +70,7 @@ const getDriverIcon = (driverType) => {
 };
 
 const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState('investigation'); // 'investigation' | 'explanation'
+  const [activeTab, setActiveTab] = useState('investigation'); // 'investigation' | 'explanation' | 'ai_reasoning'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
@@ -75,6 +80,12 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
   const [explError, setExplError] = useState(null);
   const [explanation, setExplanation] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // AI Reasoning state
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiRefreshing, setAiRefreshing] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiData, setAiData] = useState(null);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -86,11 +97,13 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Reset tab when anomalyId changes
+  // Reset tabs and cached state when anomalyId changes
   useEffect(() => {
     setActiveTab('investigation');
     setExplanation(null);
     setExplError(null);
+    setAiData(null);
+    setAiError(null);
   }, [anomalyId]);
 
   // Fetch Investigation data
@@ -113,7 +126,7 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
     fetchInvestigation();
   }, [isOpen, anomalyId]);
 
-  // Fetch Explanation data when switching to explanation tab or triggered
+  // Fetch Explanation data when switching to explanation tab
   useEffect(() => {
     if (!isOpen || !anomalyId || activeTab !== 'explanation') return;
     if (explanation) return; // Already loaded
@@ -133,6 +146,41 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
 
     fetchExplanation();
   }, [isOpen, anomalyId, activeTab, explanation]);
+
+  // Fetch AI Reasoning data when switching to ai_reasoning tab
+  useEffect(() => {
+    if (!isOpen || !anomalyId || activeTab !== 'ai_reasoning') return;
+    if (aiData) return; // Already loaded
+
+    const fetchReasoning = async () => {
+      try {
+        setAiLoading(true);
+        setAiError(null);
+        const result = await getAIReasoningApi(anomalyId, { refresh: false });
+        setAiData(result);
+      } catch (err) {
+        setAiError(extractErrorMessage(err));
+      } finally {
+        setAiLoading(false);
+      }
+    };
+
+    fetchReasoning();
+  }, [isOpen, anomalyId, activeTab, aiData]);
+
+  const handleRefreshAI = async () => {
+    if (!anomalyId) return;
+    try {
+      setAiRefreshing(true);
+      setAiError(null);
+      const result = await getAIReasoningApi(anomalyId, { refresh: true });
+      setAiData(result);
+    } catch (err) {
+      setAiError(extractErrorMessage(err));
+    } finally {
+      setAiRefreshing(false);
+    }
+  };
 
   const handleCopyBrief = () => {
     if (!explanation) return;
@@ -236,6 +284,17 @@ ${limitationsList}
                 <FileText className="w-3.5 h-3.5" />
                 <span>Executive Brief</span>
               </button>
+              <button
+                onClick={() => setActiveTab('ai_reasoning')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeTab === 'ai_reasoning'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <BrainCircuit className="w-3.5 h-3.5 text-purple-300" />
+                <span>AI Reasoning</span>
+              </button>
             </div>
 
             <button
@@ -337,7 +396,7 @@ ${limitationsList}
                 </div>
               </div>
 
-              {/* Executive Summary & View Executive Brief Callout */}
+              {/* Executive Summary & Quick Action Buttons */}
               <div className="rounded-2xl bg-gradient-to-r from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-500/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center space-x-2 text-xs font-bold text-indigo-300">
@@ -348,13 +407,22 @@ ${limitationsList}
                     {data.investigation_summary?.replace(/\$/g, '₹')}
                   </p>
                 </div>
-                <button
-                  onClick={() => setActiveTab('explanation')}
-                  className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all shrink-0 cursor-pointer"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>View Executive Brief</span>
-                </button>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <button
+                    onClick={() => setActiveTab('explanation')}
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>View Brief</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('ai_reasoning')}
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition-all cursor-pointer"
+                  >
+                    <BrainCircuit className="w-3.5 h-3.5" />
+                    <span>AI Reasoning</span>
+                  </button>
+                </div>
               </div>
 
               {/* Contributing Drivers Section */}
@@ -441,7 +509,7 @@ ${limitationsList}
                 </ul>
               </div>
             </>
-          ) : (
+          ) : activeTab === 'explanation' ? (
             /* TAB 2: Phase 6.3 Executive Brief */
             <div className="space-y-6">
               {explError ? (
@@ -478,22 +546,31 @@ ${limitationsList}
                         </span>
                       </div>
 
-                      <button
-                        onClick={handleCopyBrief}
-                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">Copied Brief</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Copy Brief</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setActiveTab('ai_reasoning')}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                        >
+                          <BrainCircuit className="w-3.5 h-3.5" />
+                          <span>View AI Reasoning</span>
+                        </button>
+                        <button
+                          onClick={handleCopyBrief}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+                        >
+                          {copied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-emerald-400">Copied Brief</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Copy Brief</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     <h2 className="text-lg sm:text-xl font-bold text-slate-100 leading-snug">
@@ -603,6 +680,235 @@ ${limitationsList}
                         <li key={idx}>{lim}</li>
                       ))}
                     </ul>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            /* TAB 3: Phase 6.4 AI Reasoning Layer */
+            <div className="space-y-6">
+              {aiError ? (
+                <div className="rounded-2xl bg-amber-950/30 border border-amber-500/30 p-5 space-y-3">
+                  <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span>AI Reasoning Currently Unavailable</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {aiError}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Deterministic statistical anomaly detection, root-cause driver attribution, and executive briefs remain 100% operational.
+                  </p>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => handleRefreshAI()}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-colors cursor-pointer"
+                    >
+                      Retry Reasoning
+                    </button>
+                  </div>
+                </div>
+              ) : aiLoading || !aiData ? (
+                <div className="py-12">
+                  <LoadingSpinner
+                    text="Synthesizing multi-dimensional evidence with Gemini AI reasoning layer..."
+                    size="lg"
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* AI Reasoning Header & Actions */}
+                  <div className="rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-slate-900 border border-purple-500/30 p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 border border-purple-500/30 text-purple-300 flex items-center space-x-1">
+                          <BrainCircuit className="w-3 h-3" />
+                          <span>AI-GENERATED REASONING</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 italic">
+                          Grounded in statistical evidence
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {aiData.cached && (
+                          <span className="text-[10px] font-mono text-slate-500 uppercase px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700">
+                            Cached
+                          </span>
+                        )}
+                        <button
+                          onClick={handleRefreshAI}
+                          disabled={aiRefreshing}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <RotateCw className={`w-3.5 h-3.5 text-purple-400 ${aiRefreshing ? 'animate-spin' : ''}`} />
+                          <span>{aiRefreshing ? 'Refreshing...' : 'Refresh Analysis'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-100 leading-snug">
+                      {aiData.reasoning_headline}
+                    </h2>
+                  </div>
+
+                  {/* Executive Interpretation */}
+                  <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-5 space-y-2">
+                    <div className="flex items-center space-x-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
+                      <Lightbulb className="w-4 h-4" />
+                      <span>Executive Interpretation</span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      {aiData.executive_interpretation}
+                    </p>
+                  </div>
+
+                  {/* Key Insights Grid */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        <span>Key Evidence-Grounded Insights ({aiData.key_insights.length})</span>
+                      </h4>
+                      <span className="text-[11px] text-slate-500">
+                        Synthesized from deterministic drivers
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {aiData.key_insights.map((insight, idx) => {
+                        const confClass =
+                          CONFIDENCE_BADGES[insight.confidence] || CONFIDENCE_BADGES.low;
+
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-2xl bg-slate-950/60 border border-slate-800/80 p-4 space-y-2 flex flex-col justify-between"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-slate-100 leading-snug">
+                                  {insight.statement}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border shrink-0 ${confClass}`}
+                                >
+                                  {insight.confidence.toUpperCase()}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-400 leading-relaxed">
+                                {insight.supporting_evidence}
+                              </p>
+                            </div>
+                            {insight.related_driver && (
+                              <div className="pt-2">
+                                <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-400 font-mono">
+                                  Driver: {insight.related_driver}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2-Column: Alternative Explanations & Evidence Assessment */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Alternative Explanations */}
+                    <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4 space-y-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        <Layers className="w-4 h-4 text-indigo-400" />
+                        <span>Alternative Explanations</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 italic">
+                        Competing hypotheses supported by empirical patterns:
+                      </p>
+                      <ul className="space-y-1.5 text-xs text-slate-300">
+                        {aiData.alternative_explanations.map((alt, idx) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span className="text-indigo-400 mt-0.5">•</span>
+                            <span>{alt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Evidence Assessment */}
+                    <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4 space-y-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>Evidence Strength Assessment</span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {aiData.evidence_assessment}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 2-Column: Uncertainties & Validation Questions */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Uncertainties */}
+                    <div className="rounded-2xl bg-slate-950/60 border border-slate-800 p-4 space-y-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        <HelpCircle className="w-4 h-4 text-amber-400" />
+                        <span>Identified Uncertainties</span>
+                      </div>
+                      <ul className="space-y-1.5 text-xs text-slate-400">
+                        {aiData.uncertainties.map((unc, idx) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span className="text-amber-400 mt-0.5">•</span>
+                            <span>{unc}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Validation Questions */}
+                    <div className="rounded-2xl bg-slate-950/60 border border-slate-800 p-4 space-y-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        <Check className="w-4 h-4 text-sky-400" />
+                        <span>Validation Questions for Stakeholders</span>
+                      </div>
+                      <ul className="space-y-1.5 text-xs text-slate-300">
+                        {aiData.validation_questions.map((q, idx) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span className="text-sky-400 font-mono text-xs">{idx + 1}.</span>
+                            <span>{q}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Risk Flags */}
+                  {aiData.risk_flags && aiData.risk_flags.length > 0 && (
+                    <div className="rounded-2xl bg-slate-950/70 border border-rose-950/50 p-4 space-y-2">
+                      <div className="flex items-center space-x-2 text-xs font-bold text-rose-400 uppercase tracking-wider">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Risk Flags & Critical Attention Areas</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {aiData.risk_flags.map((risk, idx) => (
+                          <div
+                            key={idx}
+                            className="rounded-xl bg-rose-950/20 border border-rose-500/20 p-2.5 text-xs text-rose-300 flex items-start space-x-2"
+                          >
+                            <span className="text-rose-400 font-bold">•</span>
+                            <span>{risk}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mandatory Causal Disclaimer Banner */}
+                  <div className="rounded-2xl bg-slate-950/40 border border-slate-800/80 p-4 flex items-center space-x-3 text-xs text-slate-400">
+                    <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0" />
+                    <p className="leading-relaxed">
+                      <strong className="text-slate-300">Scientific Attribution Disclaimer:</strong>{' '}
+                      {aiData.causal_disclaimer}
+                    </p>
                   </div>
                 </>
               )}

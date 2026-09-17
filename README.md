@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-88%2F88%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-128%2F128%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -137,6 +137,18 @@ This project addresses the problem by building a complete forecasting pipeline t
 - **Interactive UI with 1-Click Clipboard Export**: Features an "Executive Brief" view within the Investigation Drawer and a "Copy Brief" action providing clean Markdown formatting.
 - **API Endpoint**: `GET /api/explanations/{anomaly_id}` supporting `top_n` and `format` query parameters.
 
+## Sales Anomaly AI Reasoning Layer (Phase 6.4)
+
+- **Purpose**: Augments deterministic statistical investigations and executive explanations with commercial business reasoning powered by Google Gemini (`gemini-3.8-flash`) via the official `google-genai` SDK.
+- **Evidence-Grounded Intelligence**: Operates strictly on compact, structured JSON evidence packages (< 2 KB) generated from Phase 6.2 and 6.3. Never ingests raw transactional datasets, preventing context bloat and data leakage.
+- **Provider Abstraction**: Extensible `LLMProvider` interface decoupled from concrete implementation, facilitating pluggable backends and reliable unit testing.
+- **Strict Structured Outputs**: Enforces JSON schema compliance via Pydantic (`AIReasoningResponse`), guaranteeing structured headline, commercial interpretation, granular key insights, alternative explanations, data quality assessment, uncertainties, validation questions, risk flags, and standard causal disclaimers.
+- **Causal Guardrails & Post-Validation**: Programmatically sanitizes unauthorized causal phrasing (e.g., converting "caused by" or "because of" to observational associations) and enforces mandatory causal disclaimers.
+- **Cost & Latency Optimization**: In-memory caching per anomaly ID prevents redundant LLM inference costs and latency, with optional on-demand cache bypass (`?refresh=true`).
+- **Graceful Degradation**: If `GEMINI_API_KEY` is omitted or upstream API errors occur, returns HTTP 503 with helpful setup instructions while keeping the rest of the application 100% operational.
+- **Interactive UI Tab**: Dedicated "AI Reasoning" tab in the Investigation Drawer featuring confidence pills, driver tags, risk flags, validation checklists, and a 1-click refresh analysis trigger.
+- **API Endpoint**: `GET /api/ai-reasoning/{anomaly_id}` supporting `refresh` query parameter.
+
 ## Full-Stack Application
 
 - User registration
@@ -174,9 +186,10 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Anomaly Insights    │
                          │ Investigation Drawer│
                          │ Executive Brief     │
+                         │ AI Reasoning Tab    │
                          └──────────┬──────────┘
                                     │
-                              REST / JSON
+                               REST / JSON
                                     │
                                     ▼
                          ┌─────────────────────┐
@@ -189,6 +202,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Anomalies API       │
                          │ Investigations API  │
                          │ Explanations API    │
+                         │ AI Reasoning API    │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
@@ -200,6 +214,7 @@ This project addresses the problem by building a complete forecasting pipeline t
           │ Products        │             │ Anomaly Engine   │
           │ Sales Records   │             │ Root-Cause Engine│
           │                 │             │ Narrative Engine │
+          │                 │             │ Gemini Reasoning │
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -1111,6 +1126,18 @@ The backend contains automated API and statistical tests covering:
 - Synthetic spike and drop detection
 - Severity, metric, date, and direction filtering
 - Category and product-level anomaly endpoints
+- Sales Anomaly AI Reasoning (`/api/ai-reasoning/{id}`)
+- Google Gemini structured response validation & Pydantic schema conformance
+- Deterministic evidence entailment validation (dimension, driver matching, confidence capping)
+- Deterministic numerical grounding validation (actual values, baselines, deviations, driver figures)
+- Unsupported product-tier & luxury claim rejection (premium lines, luxury goods, higher tiers)
+- Validation questions grammatical question enforcement & product-mix hypothesis conversion
+- Unsupported holiday and promotion claim rejection
+- External speculation sanitization (competitors, marketing, inventory, operations)
+- Causal language sanitization & mandatory disclaimer enforcement
+- Adversarial prompt injection defense
+- Upstream provider error & unconfigured key graceful degradation (HTTP 503)
+- In-memory reasoning cache & cache invalidation (`?refresh=true`)
 - Validation
 - Error handling
 
@@ -1123,7 +1150,7 @@ pytest -q
 Current result:
 
 ```text
-88 passed
+128 passed
 ```
 
 The remaining warnings are dependency-level FastAPI/Starlette/AnyIO warnings and do not represent application test failures.
@@ -1166,6 +1193,17 @@ The production build currently completes successfully.
 - [x] Sales Anomaly Detection API (`/api/anomalies`)
 - [x] Sales Anomaly Investigation API (`/api/investigations/{id}`)
 - [x] Executive Narrative Explanation API (`/api/explanations/{id}`)
+- [x] Sales Anomaly AI Reasoning API (`/api/ai-reasoning/{id}`)
+- [x] Gemini SDK (`google-genai`) structured outputs integration
+- [x] Grounded reasoning strictly from Phase 6.2/6.3 evidence packages (< 2 KB)
+- [x] Deterministic evidence entailment & grounding validation layer
+- [x] Deterministic numerical grounding consistency post-validation
+- [x] Product-tier hypothesis elimination & grammatical validation question enforcement
+- [x] False holiday & promotion claim rejection
+- [x] External factor assertion filtering (competitors, inventory, marketing)
+- [x] Causal guardrails & deterministic post-validation
+- [x] In-memory reasoning cache with on-demand refresh bypass
+- [x] Graceful degradation on missing API key / upstream failure (HTTP 503)
 - [x] Multi-driver root-cause decomposition without lookahead leakage
 - [x] Category and Product anomaly queries & contributions
 - [x] Quantified business impact estimation
@@ -1173,7 +1211,7 @@ The production build currently completes successfully.
 - [x] Key driver prioritization & top-N capping
 - [x] Validation works
 - [x] Error handling works
-- [x] 88/88 tests passing
+- [x] 128/128 tests passing
 
 ## Frontend
 
@@ -1191,6 +1229,9 @@ The production build currently completes successfully.
 - [x] Anomaly Insights page (`/anomalies`)
 - [x] Investigation Drawer with driver ranking & evidence
 - [x] Executive Brief drawer tab & 1-click Markdown clipboard export
+- [x] AI Reasoning drawer tab with insight cards, confidence pills, & risk flags
+- [x] On-demand "Refresh Analysis" trigger
+- [x] Graceful error state banner for HTTP 503 / missing API key
 - [x] Responsive layout
 - [x] Loading states
 - [x] Error states

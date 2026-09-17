@@ -4,6 +4,7 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.api.ai_reasoning import router as ai_reasoning_router
 from backend.app.api.anomalies import router as anomalies_router
 from backend.app.api.auth import router as auth_router
 from backend.app.api.explanations import router as explanations_router
@@ -96,6 +97,7 @@ async def log_requests(
 app.include_router(anomalies_router)
 app.include_router(investigations_router)
 app.include_router(explanations_router)
+app.include_router(ai_reasoning_router)
 app.include_router(auth_router)
 app.include_router(forecast_router)
 app.include_router(products_router)
