@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getInvestigationApi } from '../api/investigations';
 import { getExplanationApi } from '../api/explanations';
 import { getAIReasoningApi } from '../api/aiReasoning';
+import { getRecommendationsApi } from '../api/recommendations';
 import { extractErrorMessage } from '../api/axios';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -87,6 +88,12 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
   const [aiError, setAiError] = useState(null);
   const [aiData, setAiData] = useState(null);
 
+  // Recommendations state
+  const [recLoading, setRecLoading] = useState(false);
+  const [recRefreshing, setRecRefreshing] = useState(false);
+  const [recError, setRecError] = useState(null);
+  const [recData, setRecData] = useState(null);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && isOpen) {
@@ -104,6 +111,8 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
     setExplError(null);
     setAiData(null);
     setAiError(null);
+    setRecData(null);
+    setRecError(null);
   }, [anomalyId]);
 
   // Fetch Investigation data
@@ -168,6 +177,27 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
     fetchReasoning();
   }, [isOpen, anomalyId, activeTab, aiData]);
 
+  // Fetch Recommendations data when switching to recommendations tab
+  useEffect(() => {
+    if (!isOpen || !anomalyId || activeTab !== 'recommendations') return;
+    if (recData) return; // Already loaded
+
+    const fetchRecommendations = async () => {
+      try {
+        setRecLoading(true);
+        setRecError(null);
+        const result = await getRecommendationsApi(anomalyId, { refresh: false });
+        setRecData(result);
+      } catch (err) {
+        setRecError(extractErrorMessage(err));
+      } finally {
+        setRecLoading(false);
+      }
+    };
+
+    fetchRecommendations();
+  }, [isOpen, anomalyId, activeTab, recData]);
+
   const handleRefreshAI = async () => {
     if (!anomalyId) return;
     try {
@@ -179,6 +209,20 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
       setAiError(extractErrorMessage(err));
     } finally {
       setAiRefreshing(false);
+    }
+  };
+
+  const handleRefreshRec = async () => {
+    if (!anomalyId) return;
+    try {
+      setRecRefreshing(true);
+      setRecError(null);
+      const result = await getRecommendationsApi(anomalyId, { refresh: true });
+      setRecData(result);
+    } catch (err) {
+      setRecError(extractErrorMessage(err));
+    } finally {
+      setRecRefreshing(false);
     }
   };
 
@@ -294,6 +338,17 @@ ${limitationsList}
               >
                 <BrainCircuit className="w-3.5 h-3.5 text-purple-300" />
                 <span>AI Reasoning</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('recommendations')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeTab === 'recommendations'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Lightbulb className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Recommendations</span>
               </button>
             </div>
 
@@ -912,6 +967,259 @@ ${limitationsList}
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* View: Prescriptive Recommendations */}
+          {activeTab === 'recommendations' && (
+            <div className="space-y-6">
+              {recError ? (
+                <ErrorMessage
+                  title="Recommendations Unavailable"
+                  message={recError}
+                  onRetry={handleRefreshRec}
+                />
+              ) : recLoading ? (
+                <div className="py-16">
+                  <LoadingSpinner
+                    text="Formulating evidence-grounded prescriptive recommendations..."
+                    size="lg"
+                  />
+                </div>
+              ) : recData ? (
+                <>
+                  {/* Top Control Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <Lightbulb className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-sm font-bold text-white">Prescriptive Action Recommendations</h3>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              recData.source === 'deterministic_fallback'
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                            }`}
+                          >
+                            {recData.source === 'deterministic_fallback' ? 'Deterministic Fallback' : 'Gemini AI'}
+                          </span>
+                          {recData.cached && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                              Cached
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Targeted advisory steps based on statistical evidence and policy rules.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleRefreshRec}
+                      disabled={recRefreshing}
+                      className="flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <RotateCw className={`w-3.5 h-3.5 ${recRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+                      <span>{recRefreshing ? 'Refreshing...' : 'Refresh Actions'}</span>
+                    </button>
+                  </div>
+
+                  {/* Mandatory Human Review Banner */}
+                  <div className="rounded-2xl bg-amber-950/20 border border-amber-500/30 p-4 flex items-start space-x-3 text-xs text-amber-200/90">
+                    <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-semibold text-amber-300">
+                        Human Approval Required Before Any Action
+                      </p>
+                      <p className="text-amber-200/80 leading-relaxed">
+                        Recommendations are non-autonomous decision-support suggestions. A qualified manager must review, validate external constraints, and approve any operational changes. The system never executes actions automatically.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Deterministic Fallback Banner */}
+                  {recData.source === 'deterministic_fallback' && (
+                    <div className="rounded-2xl bg-sky-950/20 border border-sky-500/30 p-3.5 flex items-center space-x-2.5 text-xs text-sky-300">
+                      <Activity className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span>
+                        AI recommendation generation is unavailable. Evidence-grounded recommendation options are shown using deterministic policy rules.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Summary Card */}
+                  <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-5 space-y-2">
+                    <div className="flex items-center space-x-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      <FileText className="w-4 h-4 text-emerald-400" />
+                      <span>Executive Synthesis</span>
+                    </div>
+                    <p className="text-sm text-slate-200 leading-relaxed font-medium">
+                      {recData.summary}
+                    </p>
+                  </div>
+
+                  {/* Action Cards */}
+                  {recData.recommendations && recData.recommendations.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                        <span className="font-semibold uppercase tracking-wider">
+                          Prioritized Actions ({recData.recommendations.length})
+                        </span>
+                        <span>Sorted by deterministic evidence score</span>
+                      </div>
+
+                      {recData.recommendations.map((rec) => (
+                        <div
+                          key={rec.id}
+                          className="rounded-2xl bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition-all p-5 space-y-4 shadow-sm"
+                        >
+                          {/* Header: Type, Title & Priority */}
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700">
+                                {rec.recommendation_type.replace(/_/g, ' ')}
+                              </span>
+                              <h4 className="text-sm font-bold text-white pt-1">
+                                {rec.title}
+                              </h4>
+                            </div>
+                            <div className="flex items-center space-x-2 text-xs">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                  SEVERITY_BADGES[rec.priority] || SEVERITY_BADGES.medium
+                                }`}
+                              >
+                                {rec.priority.toUpperCase()} PRIORITY
+                              </span>
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+                                  CONFIDENCE_BADGES[rec.confidence] || CONFIDENCE_BADGES.medium
+                                }`}
+                              >
+                                {rec.confidence.toUpperCase()} CONFIDENCE
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Recommended Action */}
+                          <div className="rounded-xl bg-emerald-950/20 border border-emerald-500/20 p-3.5 text-xs text-emerald-200 flex items-start space-x-2.5">
+                            <span className="font-bold text-emerald-400 shrink-0 uppercase tracking-wider text-[10px] mt-0.5">
+                              Action to Consider:
+                            </span>
+                            <span className="font-medium text-slate-100">{rec.action}</span>
+                          </div>
+
+                          {/* Reason & Evidence */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/60 space-y-1">
+                              <span className="text-slate-400 font-semibold block text-[11px]">
+                                Reason & Justification:
+                              </span>
+                              <p className="text-slate-300 leading-relaxed">{rec.reason}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/60 space-y-1">
+                              <span className="text-slate-400 font-semibold block text-[11px]">
+                                Supporting Evidence:
+                              </span>
+                              <p className="text-slate-300 leading-relaxed font-mono text-[11px]">
+                                {rec.supporting_evidence}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Objective & Risk */}
+                          <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800/50">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-slate-500 text-[11px]">Objective:</span>
+                              <span className="text-slate-300 font-medium">{rec.expected_objective}</span>
+                            </div>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-slate-500 text-[11px]">Risk:</span>
+                              <span
+                                className={`font-semibold text-[11px] ${
+                                  rec.risk_level === 'high'
+                                    ? 'text-rose-400'
+                                    : rec.risk_level === 'medium'
+                                    ? 'text-amber-400'
+                                    : 'text-emerald-400'
+                                }`}
+                              >
+                                {rec.risk_level.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Trade-offs & Validations */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                            {rec.tradeoffs && rec.tradeoffs.length > 0 && (
+                              <div className="space-y-1.5">
+                                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                                  Operational Trade-offs:
+                                </span>
+                                <ul className="space-y-1 text-xs text-slate-400">
+                                  {rec.tradeoffs.map((t, idx) => (
+                                    <li key={idx} className="flex items-start space-x-1.5">
+                                      <span className="text-amber-400">•</span>
+                                      <span>{t}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {rec.validation_required && rec.validation_required.length > 0 && (
+                              <div className="space-y-1.5">
+                                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                                  Prerequisite Validation:
+                                </span>
+                                <ul className="space-y-1 text-xs text-slate-300">
+                                  {rec.validation_required.map((v, idx) => (
+                                    <li key={idx} className="flex items-start space-x-1.5">
+                                      <Check className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                                      <span>{v}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl bg-slate-950/60 border border-slate-800 p-8 text-center space-y-2">
+                      <Activity className="w-8 h-8 text-slate-500 mx-auto" />
+                      <h4 className="text-sm font-bold text-slate-300">
+                        No Actionable Recommendations Identified
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        The empirical evidence does not exceed intervention thresholds or signals were insufficient to justify operational adjustments.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Limitations */}
+                  {recData.limitations && recData.limitations.length > 0 && (
+                    <div className="rounded-2xl bg-slate-950/40 border border-slate-800/80 p-4 space-y-1.5 text-xs text-slate-400">
+                      <span className="font-semibold text-slate-300 uppercase tracking-wider text-[11px] block">
+                        Governance & Methodological Caveats:
+                      </span>
+                      <ul className="space-y-1">
+                        {recData.limitations.map((l, idx) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span className="text-indigo-400">•</span>
+                            <span>{l}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : null}
             </div>
           )}
         </div>

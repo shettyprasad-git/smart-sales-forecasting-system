@@ -11,6 +11,7 @@ from backend.app.api.explanations import router as explanations_router
 from backend.app.api.forecast import router as forecast_router
 from backend.app.api.investigations import router as investigations_router
 from backend.app.api.products import router as products_router
+from backend.app.api.recommendations import router as recommendations_router
 from backend.app.api.sales import router as sales_router
 from backend.app.core.exceptions import global_exception_handler
 from backend.app.core.logging_config import configure_logging
@@ -98,6 +99,7 @@ app.include_router(anomalies_router)
 app.include_router(investigations_router)
 app.include_router(explanations_router)
 app.include_router(ai_reasoning_router)
+app.include_router(recommendations_router)
 app.include_router(auth_router)
 app.include_router(forecast_router)
 app.include_router(products_router)

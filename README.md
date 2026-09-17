@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-128%2F128%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-166%2F166%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -149,6 +149,30 @@ This project addresses the problem by building a complete forecasting pipeline t
 - **Interactive UI Tab**: Dedicated "AI Reasoning" tab in the Investigation Drawer featuring confidence pills, driver tags, risk flags, validation checklists, and a 1-click refresh analysis trigger.
 - **API Endpoint**: `GET /api/ai-reasoning/{anomaly_id}` supporting `refresh` query parameter.
 
+## Prescriptive Action Recommendations (Phase 6.5)
+
+- **Purpose**: Bridges the gap between diagnostic analytics and commercial decision-making by synthesizing structured, evidence-grounded advisory recommendations for operational stakeholders.
+- **Strict Non-Autonomous Governance**: Recommendations are framed exclusively for human consideration using non-autonomous verbs (*Review*, *Consider*, *Validate*, *Monitor*, *Reassess*). Autonomous execution (e.g., automated purchase orders, algorithmic price cuts) is structurally prohibited, and `human_approval_required = True` is invariant across all schemas.
+- **Deterministic Eligibility Engine**: Evaluates empirical anomaly evidence against deterministic policy rules across 8 supported categories:
+  1. `inventory_review`: Triggered on positive volume/revenue spikes with category/product driver participation.
+  2. `pricing_review`: Triggered when unit price realization shifted materially.
+  3. `promotion_review`: Triggered when promotional events coincide with the deviation.
+  4. `category_review`: Triggered when category contribution exceeds 5.0%.
+  5. `product_review`: Triggered when product-level attribution is identified.
+  6. `demand_monitoring`: Triggered on drops, unstable drift, or moderate/low evidence confidence.
+  7. `forecast_review`: Triggered on high/critical severity or large percentage deviations (≥ 10.0%).
+  8. `data_validation`: Triggered on low confidence signals or extreme anomaly scores (≥ 4.0).
+- **Deterministic Prioritization & Top-3 Capping**: Candidate actions are prioritized using a deterministic scoring formula combining severity (weight 2.0), driver contribution (weight 0.1), evidence confidence (weight 1.5), and risk penalty (-0.5), strictly capping output at at most 3 primary recommendations.
+- **Robust Guardrails & Post-Validation**:
+  - Rejects ineligible recommendation types and external speculative actions.
+  - Sanitizes hallucinated imperative targets (e.g. "increase inventory by 20%" → safe advisory phrasing).
+  - Sanitizes price cut directives and ungrounded guaranteed revenue/profit claims.
+  - Caps recommendation confidence against underlying empirical driver confidence.
+  - Sanitizes causal language to maintain observational integrity.
+- **Deterministic Fallback Engine**: If Gemini is unconfigured or encounters upstream API timeouts, gracefully synthesizes grounded recommendations from deterministic policy rules (`source = "deterministic_fallback"`), ensuring 100% platform availability.
+- **Dedicated React UI Tab**: "Recommendations" tab (`Lightbulb` icon) in the Investigation Drawer featuring prominent Human Review Notice, fallback alert badges, executive synthesis card, action cards with risk/priority badges, trade-offs, and verification checklists.
+- **API Endpoint**: `GET /api/recommendations/{anomaly_id}` supporting `refresh` and `fallback` query parameters.
+
 ## Full-Stack Application
 
 - User registration
@@ -187,6 +211,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Investigation Drawer│
                          │ Executive Brief     │
                          │ AI Reasoning Tab    │
+                         │ Recommendations Tab │
                          └──────────┬──────────┘
                                     │
                                REST / JSON
@@ -203,6 +228,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Investigations API  │
                          │ Explanations API    │
                          │ AI Reasoning API    │
+                         │ Recommendations API │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
@@ -215,6 +241,7 @@ This project addresses the problem by building a complete forecasting pipeline t
           │ Sales Records   │             │ Root-Cause Engine│
           │                 │             │ Narrative Engine │
           │                 │             │ Gemini Reasoning │
+          │                 │             │ Prescriptive Recs│
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -1418,6 +1445,11 @@ http://127.0.0.1:8000/redoc
 [x] Sales UI
 [x] Forecast UI
 [x] Frontend production build
+[x] Sales Anomaly Detection (Phase 6.1)
+[x] Anomaly Investigation & Root-Cause Attribution (Phase 6.2)
+[x] Executive Narrative Reporting (Phase 6.3)
+[x] Grounded AI Reasoning Layer (Phase 6.4)
+[x] Prescriptive Action Recommendations (Phase 6.5)
 [ ] Production database
 [ ] Dockerization
 [ ] CI/CD

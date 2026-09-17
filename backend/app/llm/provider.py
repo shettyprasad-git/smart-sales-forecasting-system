@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from backend.app.schemas.ai_reasoning import AIReasoningResponse
+from backend.app.schemas.recommendation_ai import AIRecommendationResponse
 
 
 class LLMError(Exception):
@@ -34,3 +35,12 @@ class LLMProvider(ABC):
         Generate structured reasoning from a compact empirical evidence package.
         """
         pass
+
+    def generate_recommendations(
+        self, recommendation_package: dict[str, Any]
+    ) -> AIRecommendationResponse:
+        """
+        Generate structured prescriptive action recommendations from an evidence package.
+        """
+        raise NotImplementedError("generate_recommendations must be implemented by concrete provider")
+

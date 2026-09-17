@@ -11,7 +11,7 @@ from google.genai import types
 from pydantic import ValidationError
 
 from backend.app.core.config import settings
-from backend.app.llm.prompts import SYSTEM_INSTRUCTION
+from backend.app.llm.prompts import RECOMMENDATION_SYSTEM_INSTRUCTION, SYSTEM_INSTRUCTION
 from backend.app.llm.provider import (
     LLMConfigurationError,
     LLMProvider,
@@ -19,6 +19,7 @@ from backend.app.llm.provider import (
     LLMResponseValidationError,
 )
 from backend.app.schemas.ai_reasoning import AIReasoningResponse
+from backend.app.schemas.recommendation_ai import AIRecommendationResponse
 
 logger = logging.getLogger(__name__)
 
@@ -124,3 +125,70 @@ class GeminiProvider(LLMProvider):
                 exc,
             )
             raise LLMResponseValidationError(f"Invalid structured response from Gemini: {exc}") from exc
+
+    def generate_recommendations(
+        self, recommendation_package: dict[str, Any]
+    ) -> AIRecommendationResponse:
+        client = self._get_client()
+        anomaly_id = recommendation_package.get("anomaly", {}).get("anomaly_id", "unknown")
+
+        user_content = (
+            "Evaluate the following empirical anomaly evidence package and deterministically eligible "
+            "recommendation categories, then formulate structured prescriptive action recommendations:\n\n"
+            f"{json.dumps(recommendation_package, indent=2)}"
+        )
+
+        start_time = time.perf_counter()
+        logger.info(
+            "Invoking Gemini recommendations | anomaly_id=%s | model=%s",
+            anomaly_id,
+            self.model_name,
+        )
+
+        try:
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    system_instruction=RECOMMENDATION_SYSTEM_INSTRUCTION,
+                    response_mime_type="application/json",
+                    response_schema=AIRecommendationResponse,
+                    temperature=0.2,
+                ),
+            )
+        except LLMConfigurationError:
+            raise
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            logger.error(
+                "Gemini recommendation request failed | anomaly_id=%s | latency=%.2fms | error=%s",
+                anomaly_id,
+                elapsed_ms,
+                exc,
+            )
+            raise LLMProviderError(f"Gemini API request failed: {exc}") from exc
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        logger.info(
+            "Gemini recommendation response received | anomaly_id=%s | latency=%.2fms",
+            anomaly_id,
+            elapsed_ms,
+        )
+
+        raw_text = getattr(response, "text", None)
+        if not raw_text:
+            if hasattr(response, "parsed") and isinstance(response.parsed, AIRecommendationResponse):
+                return response.parsed
+            raise LLMResponseValidationError("Gemini returned an empty response for recommendations.")
+
+        try:
+            payload = json.loads(raw_text)
+            return AIRecommendationResponse.model_validate(payload)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            logger.error(
+                "Gemini recommendation response failed Pydantic validation | anomaly_id=%s | error=%s",
+                anomaly_id,
+                exc,
+            )
+            raise LLMResponseValidationError(f"Invalid structured recommendation response from Gemini: {exc}") from exc
+
