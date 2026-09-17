@@ -13,6 +13,7 @@ from backend.app.api.investigations import router as investigations_router
 from backend.app.api.products import router as products_router
 from backend.app.api.recommendations import router as recommendations_router
 from backend.app.api.sales import router as sales_router
+from backend.app.api.simulations import router as simulations_router
 from backend.app.core.exceptions import global_exception_handler
 from backend.app.core.logging_config import configure_logging
 
@@ -104,6 +105,7 @@ app.include_router(auth_router)
 app.include_router(forecast_router)
 app.include_router(products_router)
 app.include_router(sales_router)
+app.include_router(simulations_router)
 
 
 @app.get("/")

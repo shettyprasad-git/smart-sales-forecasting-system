@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-166%2F166%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-188%2F188%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -754,7 +754,13 @@ frontend/
     │   ├── auth.js
     │   ├── products.js
     │   ├── sales.js
-    │   └── forecast.js
+    │   ├── forecast.js
+    │   ├── anomalies.js
+    │   ├── investigations.js
+    │   ├── explanations.js
+    │   ├── aiReasoning.js
+    │   ├── recommendations.js
+    │   └── simulations.js
     │
     ├── context/
     │   └── AuthContext.jsx
@@ -773,7 +779,9 @@ frontend/
     │   ├── SalesChart.jsx
     │   ├── ForecastChart.jsx
     │   ├── Modal.jsx
-    │   └── ConfirmDialog.jsx
+    │   ├── ConfirmDialog.jsx
+    │   ├── InvestigationDrawer.jsx
+    │   └── SimulationPanel.jsx
     │
     ├── pages/
     │   ├── Login.jsx
@@ -782,6 +790,8 @@ frontend/
     │   ├── Products.jsx
     │   ├── Sales.jsx
     │   ├── Forecast.jsx
+    │   ├── Anomalies.jsx
+    │   ├── Simulation.jsx
     │   └── NotFound.jsx
     │
     └── utils/
@@ -1422,6 +1432,57 @@ http://127.0.0.1:8000/redoc
 
 ---
 
+# Financial Intelligence Pipeline (Phase 6)
+
+The Smart Sales Forecasting System features a comprehensive, non-autonomous executive intelligence pipeline:
+
+```text
+DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE → HUMAN APPROVAL
+```
+
+### Phase 6.1 — Sales Anomaly Detection
+- Detection across Aggregate, Category, and Product grains.
+- Dual-metric tracking: Quantity and Sales Amount.
+- Bi-directional detection: Demand Spikes and Drops.
+
+### Phase 6.2 — Root-Cause Attribution
+- Multi-dimensional decomposition: Promotions, Holidays, Categories, Products, Pricing, Discounts, and Drift.
+- Zero-lookahead causal historical baselines.
+- Quantified business impact analysis.
+
+### Phase 6.3 — Executive Narrative Reporting
+- Deterministic, audit-ready natural language executive briefings.
+- Indian Rupees (₹) monetary formatting.
+
+### Phase 6.4 — Grounded Gemini AI Reasoning Layer
+- Gemini 2.5 Flash / Flash Lite executive reasoning over empirical evidence packages.
+- Strict causal boundaries: zero hallucinated causal factors or unsupported product tiers.
+- Guaranteed numerical consistency with underlying ML evidence.
+
+### Phase 6.5 — Prescriptive Action Recommendations
+- Non-autonomous prescriptive recommendations for human evaluation.
+- Deterministic eligibility gating across 8 recommendation categories.
+- Gemini strategic rationale, trade-off evaluation, and risk considerations.
+
+### Phase 6.6 — What-If Scenario Simulation
+- Non-destructive hypothetical scenario exploration over 7, 30, and 90-day horizons without modifying historical sales records.
+- **Supported Scenarios**:
+  - `demand_multiplier`: Uniform percentage shift (-50% to +50%).
+  - `temporary_shock`: Short-term demand disturbance (1 to horizon days) with automatic reversion to baseline.
+  - `persistent_shift`: Sustained structural demand level shift.
+  - `trend_continuation`: Extrapolates recent historical linear velocity (7 to 90-day window).
+  - `promotion_scenario`: Evaluates promotional lift via production ML model.
+  - `holiday_scenario`: Evaluates calendar holiday lift via production ML model.
+- **Model Boundaries**:
+  - `price_change` & `discount_change` return `status = "requires_model"` with explicit explanations; elasticity numbers are never fabricated.
+- **Baseline Realized Price**: Revenue calculated under constant baseline realized unit price assumption (₹3,400.87/unit).
+- **10 Numerical Invariants**: Daily sums match summary totals, delta math is consistent, non-negative quantities, finite numbers, and sequential continuous dates.
+- **API Endpoints**:
+  - `POST /api/simulations`: Authenticated scenario execution with JWT Bearer token.
+  - `GET /api/simulations/{id}`: Cached simulation retrieval.
+
+---
+
 # Development Roadmap
 
 ```text
@@ -1450,6 +1511,7 @@ http://127.0.0.1:8000/redoc
 [x] Executive Narrative Reporting (Phase 6.3)
 [x] Grounded AI Reasoning Layer (Phase 6.4)
 [x] Prescriptive Action Recommendations (Phase 6.5)
+[x] What-If Scenario Simulation (Phase 6.6)
 [ ] Production database
 [ ] Dockerization
 [ ] CI/CD

@@ -11,6 +11,7 @@ import Products from './pages/Products';
 import Sales from './pages/Sales';
 import Forecast from './pages/Forecast';
 import Anomalies from './pages/Anomalies';
+import Simulation from './pages/Simulation';
 import NotFound from './pages/NotFound';
 
 // Root redirect handler
@@ -38,6 +39,7 @@ const AppContent = () => {
           <Route path="/sales" element={<Sales />} />
           <Route path="/forecast" element={<Forecast />} />
           <Route path="/anomalies" element={<Anomalies />} />
+          <Route path="/simulation" element={<Simulation />} />
         </Route>
       </Route>
 

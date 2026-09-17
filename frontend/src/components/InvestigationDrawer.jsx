@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getInvestigationApi } from '../api/investigations';
 import { getExplanationApi } from '../api/explanations';
 import { getAIReasoningApi } from '../api/aiReasoning';
@@ -28,6 +29,7 @@ import {
   RotateCw,
   AlertTriangle,
   Lightbulb,
+  Sliders,
 } from 'lucide-react';
 import {
   formatCurrency,
@@ -71,6 +73,7 @@ const getDriverIcon = (driverType) => {
 };
 
 const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('investigation'); // 'investigation' | 'explanation' | 'ai_reasoning'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -349,6 +352,17 @@ ${limitationsList}
               >
                 <Lightbulb className="w-3.5 h-3.5 text-emerald-300" />
                 <span>Recommendations</span>
+              </button>
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate(`/simulation?anomaly_id=${anomalyId}`);
+                }}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-indigo-400 hover:text-white hover:bg-indigo-600 transition-all cursor-pointer"
+                title="Run What-If Simulation anchored to this anomaly"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Simulate</span>
               </button>
             </div>
 

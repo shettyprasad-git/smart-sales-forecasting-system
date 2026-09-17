@@ -44,3 +44,11 @@ class LLMProvider(ABC):
         """
         raise NotImplementedError("generate_recommendations must be implemented by concrete provider")
 
+    def generate_simulation_explanation(
+        self, simulation_package: dict[str, Any]
+    ) -> str:
+        """
+        Generate a concise executive explanation of pre-calculated what-if simulation results.
+        """
+        raise NotImplementedError("generate_simulation_explanation must be implemented by concrete provider")
+

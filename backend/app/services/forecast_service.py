@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -89,6 +89,7 @@ class BackendForecastService:
     def generate_forecast(
         self,
         horizon: int,
+        events: pd.DataFrame | None = None,
     ) -> tuple[str, pd.DataFrame]:
 
         service = self._get_service(horizon)
@@ -130,14 +131,14 @@ class BackendForecastService:
             + pd.Timedelta(days=1)
         )
 
-        events = pd.DataFrame(
-            columns=[
-                "Promotions",
-                "Holiday_Flag",
-            ]
-        )
-
-        events.index = pd.DatetimeIndex([])
+        if events is None:
+            events = pd.DataFrame(
+                columns=[
+                    "Promotions",
+                    "Holiday_Flag",
+                ]
+            )
+            events.index = pd.DatetimeIndex([])
 
         forecast_df = service.forecast(
             history=history,

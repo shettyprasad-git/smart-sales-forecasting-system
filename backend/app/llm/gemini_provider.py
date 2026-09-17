@@ -11,7 +11,11 @@ from google.genai import types
 from pydantic import ValidationError
 
 from backend.app.core.config import settings
-from backend.app.llm.prompts import RECOMMENDATION_SYSTEM_INSTRUCTION, SYSTEM_INSTRUCTION
+from backend.app.llm.prompts import (
+    RECOMMENDATION_SYSTEM_INSTRUCTION,
+    SIMULATION_EXPLANATION_SYSTEM_INSTRUCTION,
+    SYSTEM_INSTRUCTION,
+)
 from backend.app.llm.provider import (
     LLMConfigurationError,
     LLMProvider,
@@ -191,4 +195,56 @@ class GeminiProvider(LLMProvider):
                 exc,
             )
             raise LLMResponseValidationError(f"Invalid structured recommendation response from Gemini: {exc}") from exc
+
+    def generate_simulation_explanation(
+        self, simulation_package: dict[str, Any]
+    ) -> str:
+        client = self._get_client()
+        sim_id = simulation_package.get("simulation_id", "unknown")
+
+        user_content = (
+            "Review the following pre-calculated what-if simulation results, assumptions, and limitations, "
+            "and provide a concise executive narrative explanation (2-3 sentences):\n\n"
+            f"{json.dumps(simulation_package, indent=2)}"
+        )
+
+        start_time = time.perf_counter()
+        logger.info(
+            "Invoking Gemini simulation explanation | simulation_id=%s | model=%s",
+            sim_id,
+            self.model_name,
+        )
+
+        try:
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    system_instruction=SIMULATION_EXPLANATION_SYSTEM_INSTRUCTION,
+                    temperature=0.2,
+                ),
+            )
+        except LLMConfigurationError:
+            raise
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            logger.error(
+                "Gemini simulation explanation request failed | simulation_id=%s | latency=%.2fms | error=%s",
+                sim_id,
+                elapsed_ms,
+                exc,
+            )
+            raise LLMProviderError(f"Gemini API request failed: {exc}") from exc
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        logger.info(
+            "Gemini simulation explanation received | simulation_id=%s | latency=%.2fms",
+            sim_id,
+            elapsed_ms,
+        )
+
+        raw_text = getattr(response, "text", None)
+        if not raw_text or not raw_text.strip():
+            raise LLMResponseValidationError("Gemini returned an empty simulation explanation.")
+        return raw_text.strip()
 

@@ -274,3 +274,90 @@ def build_recommendation_evidence(
         },
     }
 
+
+SIMULATION_EXPLANATION_SYSTEM_INSTRUCTION = """You are the Executive Simulation Explanation Engine for the Smart Sales Forecasting System.
+You are given pre-calculated what-if simulation results, assumptions, and limitations.
+The pre-calculated numbers are authoritative and immutable.
+
+STRICT OPERATIONAL RULES:
+1. NUMERICAL INVARIANCE:
+   NEVER calculate, recalculate, estimate, or change any numbers.
+   Use ONLY the numbers explicitly provided in the simulation package.
+2. CURRENCY FORMATTING:
+   All monetary amounts MUST be formatted in Indian Rupees (₹).
+3. CAUSAL BOUNDARY & HYPOTHETICAL NATURE:
+   Clearly state that this is a hypothetical scenario exploration and does NOT guarantee real-world outcomes.
+   Mention the primary assumptions (e.g. constant realized unit price, unchanged customer behavior) when relevant.
+4. EXECUTIVE CLARITY:
+   Summarize concisely (2 to 3 sentences):
+   - What hypothetical scenario was evaluated.
+   - The resulting baseline vs. scenario outcomes (total quantity, total revenue, and deltas).
+   - Key operational consideration or limitation.
+5. NO UNSUPPORTED FACTS:
+   Do not introduce unrecorded marketing campaigns, competitor moves, or unrecorded operational events.
+"""
+
+
+def build_simulation_evidence(
+    simulation: Any,
+) -> dict[str, Any]:
+    """
+    Serializes a simulation response into a compact evidence package (< 2 KB)
+    for Gemini narrative explanation.
+    """
+    baseline = getattr(simulation, "baseline", None)
+    scenario = getattr(simulation, "scenario", None)
+    delta = getattr(simulation, "delta", None)
+    anomaly_ctx = getattr(simulation, "anomaly_context", None)
+
+    baseline_data = None
+    if baseline:
+        baseline_data = {
+            "total_quantity": baseline.total_quantity,
+            "total_revenue": baseline.total_revenue,
+            "average_daily_quantity": baseline.average_daily_quantity,
+            "average_daily_revenue": baseline.average_daily_revenue,
+        }
+
+    scenario_data = None
+    if scenario:
+        scenario_data = {
+            "total_quantity": scenario.total_quantity,
+            "total_revenue": scenario.total_revenue,
+            "average_daily_quantity": scenario.average_daily_quantity,
+            "average_daily_revenue": scenario.average_daily_revenue,
+        }
+
+    delta_data = None
+    if delta:
+        delta_data = {
+            "quantity_delta": delta.quantity_delta,
+            "quantity_delta_percent": delta.quantity_delta_percent,
+            "revenue_delta": delta.revenue_delta,
+            "revenue_delta_percent": delta.revenue_delta_percent,
+        }
+
+    anomaly_data = None
+    if anomaly_ctx:
+        anomaly_data = {
+            "anomaly_id": anomaly_ctx.anomaly_id,
+            "anomaly_date": str(anomaly_ctx.anomaly_date),
+            "metric": anomaly_ctx.metric,
+            "deviation_percent": anomaly_ctx.deviation_percent,
+            "severity": anomaly_ctx.severity,
+            "key_contributors": anomaly_ctx.key_contributors,
+        }
+
+    return {
+        "simulation_id": getattr(simulation, "simulation_id", "unknown"),
+        "scenario_type": getattr(simulation, "scenario_type", "unknown"),
+        "horizon_days": getattr(simulation, "horizon_days", 30),
+        "model_name": getattr(simulation, "model_name", "unknown"),
+        "baseline": baseline_data,
+        "scenario": scenario_data,
+        "delta": delta_data,
+        "assumptions": getattr(simulation, "assumptions", []),
+        "limitations": getattr(simulation, "limitations", []),
+        "anomaly_context": anomaly_data,
+    }
+
