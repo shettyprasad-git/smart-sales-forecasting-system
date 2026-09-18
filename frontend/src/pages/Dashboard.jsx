@@ -36,6 +36,9 @@ const Dashboard = () => {
   // Intelligence Platform Telemetry
   const [intelSummary, setIntelSummary] = useState(null);
   const [pendingDecisionsCount, setPendingDecisionsCount] = useState(0);
+  const [intelLoading, setIntelLoading] = useState(true);
+  const [intelError, setIntelError] = useState(false);
+  const [decisionsError, setDecisionsError] = useState(false);
 
   const fetchDashboard = useCallback(async (selectedHorizon) => {
     try {
@@ -51,6 +54,9 @@ const Dashboard = () => {
   }, []);
 
   const fetchIntelligenceData = useCallback(async () => {
+    setIntelLoading(true);
+    setIntelError(false);
+    setDecisionsError(false);
     try {
       const [summaryRes, decisionsRes] = await Promise.allSettled([
         getMonitoringSummary(),
@@ -58,14 +64,21 @@ const Dashboard = () => {
       ]);
       if (summaryRes.status === 'fulfilled') {
         setIntelSummary(summaryRes.value);
+      } else {
+        setIntelError(true);
       }
       if (decisionsRes.status === 'fulfilled') {
         setPendingDecisionsCount(
           Array.isArray(decisionsRes.value) ? decisionsRes.value.length : 0
         );
+      } else {
+        setDecisionsError(true);
       }
     } catch {
-      // Non-blocking telemetry fallback
+      setIntelError(true);
+      setDecisionsError(true);
+    } finally {
+      setIntelLoading(false);
     }
   }, []);
 
@@ -127,10 +140,23 @@ const Dashboard = () => {
         <ErrorMessage
           title="Failed to Load Executive Dashboard"
           message={error}
-          onRetry={() => fetchDashboard(horizon)}
+          onRetry={() => {
+            fetchDashboard(horizon);
+            fetchIntelligenceData();
+          }}
         />
       ) : loading && !dashboardData ? (
         <LoadingSpinner text="Connecting to ML backend & computing dashboard telemetry..." size="lg" />
+      ) : (!historical.length && !forecast.length) ? (
+        <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-12 text-center shadow-xl space-y-4">
+          <div className="inline-flex p-4 rounded-full bg-slate-800/80 text-slate-400 mb-2">
+            <Package className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-200">No Sales Data Available</h3>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">
+            No sales records or predictions were found for this horizon. Please upload or seed a dataset to view analytics.
+          </p>
+        </div>
       ) : (
         <>
           {/* Executive Financial Intelligence & Proactive Governance Section */}
@@ -201,10 +227,18 @@ const Dashboard = () => {
                   </span>
                 </div>
                 <div className="text-2xl font-black text-slate-100 font-mono tracking-tight group-hover:text-indigo-300 transition-colors">
-                  {intelSummary?.unresolved_alerts ?? '0'}
+                  {intelLoading ? (
+                    <span className="text-base text-slate-500 font-sans animate-pulse">Loading...</span>
+                  ) : intelError ? (
+                    <span className="text-xs text-rose-400 font-sans font-medium">Unavailable</span>
+                  ) : (
+                    intelSummary?.unresolved_alerts ?? '0'
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
-                  <span>{intelSummary?.new_alerts ?? 0} newly surfaced</span>
+                  <span>
+                    {intelError ? 'Telemetry offline' : `${intelSummary?.new_alerts ?? 0} newly surfaced`}
+                  </span>
                   <span className="text-indigo-400 group-hover:translate-x-0.5 transition-transform flex items-center">
                     Review <ArrowRight className="w-3 h-3 ml-0.5" />
                   </span>
@@ -226,10 +260,16 @@ const Dashboard = () => {
                   </span>
                 </div>
                 <div className="text-2xl font-black text-slate-100 font-mono tracking-tight group-hover:text-amber-300 transition-colors">
-                  {pendingDecisionsCount}
+                  {intelLoading ? (
+                    <span className="text-base text-slate-500 font-sans animate-pulse">Loading...</span>
+                  ) : decisionsError ? (
+                    <span className="text-xs text-amber-400 font-sans font-medium">Unavailable</span>
+                  ) : (
+                    pendingDecisionsCount
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
-                  <span>Awaiting human approval</span>
+                  <span>{decisionsError ? 'Telemetry offline' : 'Awaiting human approval'}</span>
                   <span className="text-amber-400 group-hover:translate-x-0.5 transition-transform flex items-center">
                     Decide <ArrowRight className="w-3 h-3 ml-0.5" />
                   </span>

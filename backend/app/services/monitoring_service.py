@@ -331,7 +331,7 @@ class MonitoringService:
                 db.commit()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Monitoring scan failed: {str(e)}",
+                detail="Monitoring scan failed. Internal server error.",
             )
 
     def list_alerts(

@@ -47,7 +47,7 @@ def create_decision(
         logger.exception("Unexpected error creating decision record: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create decision record: {exc}",
+            detail="Failed to create decision record. Internal server error.",
         ) from exc
 
 

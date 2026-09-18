@@ -76,5 +76,5 @@ def get_anomaly_ai_reasoning(
         logger.exception("Unexpected failure during AI reasoning for %s: %s", anomaly_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI reasoning failed unexpectedly: {exc}",
+            detail="AI reasoning encountered an unexpected error. Internal server error.",
         ) from exc

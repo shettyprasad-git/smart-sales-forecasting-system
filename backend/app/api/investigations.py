@@ -56,9 +56,10 @@ def get_anomaly_investigation(
             detail=str(exc),
         ) from exc
     except FileNotFoundError as exc:
+        logger.error("Required dataset file missing: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Required dataset or file was not found. Internal server error.",
         ) from exc
     except ValueError as exc:
         raise HTTPException(
@@ -69,5 +70,5 @@ def get_anomaly_investigation(
         logger.exception("Investigation failed for anomaly %s: %s", anomaly_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Investigation failed: {exc}",
+            detail="Investigation failed. Internal server error.",
         ) from exc

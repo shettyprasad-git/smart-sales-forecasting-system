@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-280%2F280%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-302%2F302%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -1732,11 +1732,153 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
 [x] Human Approval & Decision Governance (Phase 6.7)
 [x] Proactive Intelligence & Monitoring (Phase 6.8)
 [x] Intelligence Platform Integration & Stabilization (Phase 6.9)
-[ ] Production database
+[x] Production Readiness, Deployment & Portfolio Hardening (Phase 7)
 [ ] Dockerization
-[ ] CI/CD
-[ ] Cloud deployment
+[ ] Enterprise CI/CD Pipelines
 ```
+
+---
+
+# Production Deployment & Architecture
+
+```mermaid
+graph TD
+    User["Client Browser (SPA)"] -->|HTTPS| CDN["Frontend Static Site (Render CDN / Vercel)"]
+    CDN -->|Vite SPA Bundle| User
+    User -->|REST APIs + JWT Auth| Backend["FastAPI Backend (Uvicorn ASGI)"]
+    Backend -->|SQLAlchemy Connection Pool| DB[("Managed PostgreSQL / SQLite")]
+    Backend -->|In-Process Inference| ML["Trained ML Models (Joblib Artifacts)"]
+    Backend -.->|Grounded AI Insights| Gemini["Google Gemini Pro 2.5 API"]
+```
+
+### Environment Variables Reference
+
+| Variable | Description | Default | Required in Prod? |
+|---|---|---|---|
+| `ENVIRONMENT` | Deployment environment mode (`development`, `test`, `production`) | `development` | Yes |
+| `DATABASE_URL` | SQLAlchemy database connection string (PostgreSQL or SQLite) | `sqlite:///./sales_forecasting.db` | Yes (`postgresql://...`) |
+| `SECRET_KEY` | Secret key for JWT cryptographic signing ($\ge 16$ characters) | Dev fallback key | Yes (must be set securely) |
+| `ALGORITHM` | JWT signing algorithm | `HS256` | No |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT token validity lifespan | `1440` (24h) | No |
+| `GEMINI_API_KEY` | Google Gemini API key for grounded narrative & reasoning | Empty | Optional (graceful fallback) |
+| `GEMINI_MODEL` | Gemini LLM model identifier | `gemini-2.5-pro` | No |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins (e.g., `https://my-app.onrender.com`) | `http://localhost:5173,...` | Yes in production |
+| `LOG_LEVEL` | Application logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` | No |
+
+### Production Secret Management (Platform Provisioning vs. Application Runtime)
+
+The platform enforces a strict security policy regarding secret management:
+
+- **Platform-Managed Secret Provisioning**: When deploying to cloud environments (e.g. Render, AWS, GCP), the platform provisions a cryptographically secure `SECRET_KEY` once at service provisioning time (configured in `render.yaml` via `generateValue: true`). This generated key is permanently stored in the hosting platform's encrypted vault and injected as a persistent `$SECRET_KEY` environment variable into the backend container across all restarts and redeployments.
+- **Prohibition of Application-Generated Runtime Secrets**: The FastAPI application **never** generates a secret key at runtime in production. If `ENVIRONMENT=production` and `SECRET_KEY` is missing, empty, trivial, or less than 16 characters, `backend/app/core/config.py` raises a fatal `ValidationError` and terminates process initialization. This ensures that JWT signing keys are strictly persistent across container restarts and horizontally scaled replicas, preventing silent session invalidation and silent fallback vulnerabilities.
+
+### Backend Deployment Steps
+
+1. **Install Dependencies**:
+   ```bash
+   pip install -r backend/requirements.txt
+   ```
+2. **Configure Production Environment**:
+   ```bash
+   export ENVIRONMENT=production
+   export DATABASE_URL=postgresql://user:password@host:5432/dbname
+   export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+   export ALLOWED_ORIGINS=https://your-frontend-domain.com
+   export GEMINI_API_KEY=your-gemini-key
+   ```
+3. **Launch ASGI Server**:
+   ```bash
+   uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 4
+   ```
+
+### Frontend Deployment Steps
+
+1. **Configure API Base URL**:
+   Set `VITE_API_BASE_URL=https://your-backend-domain.com` in environment or `.env.production`.
+2. **Build Production Assets**:
+   ```bash
+   cd frontend
+   npm install
+   npm run build
+   ```
+3. **Deploy Static Files**:
+   Publish `frontend/dist` directory to your static host (Render, Vercel, Netlify, Cloudflare Pages, S3/CloudFront) with SPA rewrite rule `/* -> /index.html`.
+
+### Database Setup & Connection Pooling
+
+- The backend automatically detects PostgreSQL URLs and applies production connection pooling:
+  - `pool_size = 10`
+  - `max_overflow = 20`
+  - `pool_pre_ping = True` (detects and recycles stale connections)
+  - `pool_recycle = 300` (recycles connections every 5 minutes)
+- Auto-normalizes legacy `postgres://` URLs to SQLAlchemy-compliant `postgresql://`.
+- Auto-initializes schema tables on startup via `Base.metadata.create_all(bind=engine)` with safety rollback session cleanup.
+
+### CORS Configuration Guide
+
+- In development mode, `localhost` and `127.0.0.1` ports `5173`, `3000`, `8000` are permitted.
+- In production mode:
+  - Exact origins must be explicitly specified in `ALLOWED_ORIGINS` (comma-delimited).
+  - Wildcard `*` origins are strictly rejected when credentials are enabled.
+  - Rejecting non-whitelisted origins prevents cross-site request forgery and data exfiltration.
+
+### Health Check Verification Commands
+
+```bash
+# Liveness probe (returns HTTP 200 {"status": "ok"})
+curl -i https://your-backend-domain.com/health
+
+# Readiness probe (verifies database connectivity with SELECT 1; returns HTTP 200 {"status": "ready", "database": "ok"})
+curl -i https://your-backend-domain.com/ready
+```
+
+### Local Production Simulation
+
+```bash
+# 1. Start backend in production mode locally
+$env:ENVIRONMENT="production"
+$env:SECRET_KEY="production-simulation-secret-key-32chars"
+$env:DATABASE_URL="sqlite:///./sales_forecasting.db"
+$env:ALLOWED_ORIGINS="http://localhost:4173"
+uvicorn backend.app.main:app --port 8000
+
+# 2. Build and preview frontend locally
+cd frontend
+$env:VITE_API_BASE_URL="http://localhost:8000"
+npm run build
+npm run preview -- --port 4173
+```
+
+### Model Artifact Deployment
+
+- Trained production models (`Random Forest`, `Gradient Boosting`, `Linear Regression`) are persisted via `joblib` inside `models/saved_models/`.
+- The ML inference service (`MLForecastService`) loads models once into memory on application startup.
+- If model artifacts are not yet generated, the system falls back gracefully with informative HTTP 404/503 guidance without crashing.
+
+---
+
+# Enterprise Architecture & Portfolio Highlights
+
+1. **8-Year Commercial Dataset**: 8 years of realistic retail transactions with weekly seasonality, annual cycles, holidays, promotion events, and secular demand trends.
+2. **Multi-Horizon ML Forecasting**: Horizon-optimized models (Random Forest for 7-day, Gradient Boosting for 30-day, Linear Regression for 90-day) evaluated via rolling-origin cross-validation.
+3. **Sales Anomaly Detection (Phase 6.1)**: Strictly causal rolling-window statistical scoring (Median + MAD $\times 1.4826$) with zero future data leakage.
+4. **Root-Cause Attribution Engine (Phase 6.2)**: Multi-dimensional decomposition isolating promotion impact, price elasticity, category volume shifts, and product-level drivers.
+5. **Grounded AI Reasoning (Phase 6.4)**: Gemini-powered executive narratives bounded by deterministic statistical evidence and strict anti-hallucination post-validation.
+6. **Prescriptive Action Recommendations (Phase 6.5)**: Domain-specific interventions (pricing, inventory, promotions, category strategy) with quantified impact and feasibility scoring.
+7. **What-If Scenario Simulation (Phase 6.6)**: In-memory counterfactual simulator evaluating demand shifts, price adjustments, and promotion scenarios without altering historical transactions.
+8. **Human Decision Governance & Audit Trail (Phase 6.7)**: Maker-checker approval gate (`human_approval_required: true`, `automatic_execution: false`) with immutable append-only audit event logs.
+9. **Proactive Intelligence & Monitoring (Phase 6.8)**: Automated commercial health scanner surfacing newly significant demand shifts and threshold breaches.
+10. **Enterprise Hardening & Resilience (Phase 7)**: Connection pooling, sliding-window rate limiting, correlation ID tracing (`X-Request-ID`), sanitized 500 error envelopes, and automated regression suite.
+
+---
+
+# Known Limitations & Engineering Horizon
+
+- **Price & Discount Elasticity Modeling**: Current simulation multipliers use calibrated domain heuristics; future iterations can integrate econometric double machine learning (DML) or causal forest estimators.
+- **Simulation Modeling**: Current simulation models are piece-wise linear approximations; non-linear macroeconomic or cross-product cannibalization dynamics can be added.
+- **Rate Limiting**: Current sliding-window rate limiter is in-memory per worker instance; distributed enterprise deployments should bind to Redis or Valkey clusters.
+- **Background Orchestration**: Proactive monitoring scans are invoked via API / in-process timers; production scale can incorporate temporal workers, Celery, or Cloud Tasks.
+- **Database Migrations**: Initial deployments leverage SQLAlchemy declarative schema syncing; future enterprise CI/CD can integrate Alembic for zero-downtime migration tracks.
 
 ---
 

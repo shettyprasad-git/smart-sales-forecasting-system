@@ -63,5 +63,5 @@ def get_recommendations(
         logger.exception("Unexpected error generating recommendations for %s", anomaly_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate recommendations: {exc}",
+            detail="Failed to generate recommendations. Internal server error.",
         ) from exc

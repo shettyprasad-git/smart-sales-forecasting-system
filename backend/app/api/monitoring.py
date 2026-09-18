@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from backend.app.core.rate_limiter import rate_limit_heavy_intelligence
 from backend.app.database.database import get_db
 from backend.app.database.models import User
 from backend.app.dependencies import get_current_user
@@ -29,6 +30,7 @@ monitoring_service = MonitoringService()
     response_model=MonitoringRunResponse,
     status_code=status.HTTP_200_OK,
     summary="Execute sales data monitoring scan",
+    dependencies=[Depends(rate_limit_heavy_intelligence)],
 )
 def run_monitoring(
     request: MonitoringRunRequest | None = None,

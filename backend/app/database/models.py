@@ -277,6 +277,7 @@ class DecisionRecord(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+        index=True,
     )
 
     reviewed_at: Mapped[datetime | None] = mapped_column(
@@ -354,6 +355,7 @@ class DecisionAuditEvent(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+        index=True,
     )
 
     decision: Mapped["DecisionRecord"] = relationship(
@@ -464,6 +466,7 @@ class MonitoringAlert(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+        index=True,
     )
 
     acknowledged_at: Mapped[datetime | None] = mapped_column(

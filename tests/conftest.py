@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -51,6 +51,17 @@ def setup_test_database():
 
     if TEST_DATABASE_PATH.exists():
         TEST_DATABASE_PATH.unlink()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiters():
+    from backend.app.core.rate_limiter import auth_rate_limiter, heavy_intelligence_rate_limiter
+
+    auth_rate_limiter.reset()
+    heavy_intelligence_rate_limiter.reset()
+    yield
+    auth_rate_limiter.reset()
+    heavy_intelligence_rate_limiter.reset()
 
 
 @pytest.fixture

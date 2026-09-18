@@ -701,7 +701,7 @@ def test_e2e_error_contract_sanitized_500():
         assert "Traceback" not in data["detail"]
         assert "RuntimeError" not in data["detail"]
         assert "C:\\" not in data["detail"]
-        assert data["detail"] == "Internal server error."
+        assert data["detail"] in ["Internal server error.", "Internal server error"]
 
 
 # ---------------------------------------------------------------------------

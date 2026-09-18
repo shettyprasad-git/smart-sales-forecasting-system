@@ -1,8 +1,9 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.rate_limiter import rate_limit_auth
 from backend.app.core.security import (
     create_access_token,
     hash_password,
@@ -31,6 +32,7 @@ router = APIRouter(
     "/register",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit_auth)],
 )
 def register(
     user_data: UserCreate,
@@ -73,6 +75,7 @@ def register(
 @router.post(
     "/login",
     response_model=TokenResponse,
+    dependencies=[Depends(rate_limit_auth)],
 )
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),

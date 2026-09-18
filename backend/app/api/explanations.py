@@ -54,9 +54,10 @@ def get_anomaly_explanation(
             detail=str(exc),
         ) from exc
     except FileNotFoundError as exc:
+        logger.error("Required dataset file missing: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Required dataset or file was not found. Internal server error.",
         ) from exc
     except ValueError as exc:
         raise HTTPException(
@@ -67,5 +68,5 @@ def get_anomaly_explanation(
         logger.exception("Explanation generation failed for anomaly %s: %s", anomaly_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Explanation generation failed: {exc}",
+            detail="Explanation generation failed. Internal server error.",
         ) from exc

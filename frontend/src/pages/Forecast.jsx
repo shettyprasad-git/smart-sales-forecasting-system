@@ -109,7 +109,8 @@ const Forecast = () => {
               <button
                 key={h.value}
                 onClick={() => handleHorizonChange(h.value)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                disabled={loading}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/50'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -125,7 +126,11 @@ const Forecast = () => {
       {error ? (
         <ErrorMessage
           title="Forecast Generation Failed"
-          message={error}
+          message={
+            error.includes('404') || error.toLowerCase().includes('model not found') || error.toLowerCase().includes('not trained')
+              ? 'Models are still training or not deployed. Please run training pipeline.'
+              : error
+          }
           onRetry={() => fetchForecast(horizon)}
         />
       ) : loading && !forecastResponse ? (

@@ -63,7 +63,7 @@ export const extractErrorMessage = (error) => {
   }
 
   if (error.request) {
-    return 'Unable to connect to the backend server. Please verify FastAPI is running at http://127.0.0.1:8000.';
+    return `Unable to connect to the backend server. Please verify the API service is reachable at ${baseURL}.`;
   }
 
   return error.message || 'An unknown error occurred.';

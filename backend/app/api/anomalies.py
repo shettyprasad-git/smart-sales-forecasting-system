@@ -90,9 +90,10 @@ def list_anomalies(
             window=window,
         )
     except FileNotFoundError as exc:
+        logger.error("Required dataset file missing: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Required dataset or file was not found. Internal server error.",
         ) from exc
     except ValueError as exc:
         raise HTTPException(
@@ -103,7 +104,7 @@ def list_anomalies(
         logger.exception("Failed to retrieve anomalies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Anomaly detection failed: {exc}",
+            detail="Anomaly detection failed. Internal server error.",
         ) from exc
 
 
@@ -145,7 +146,7 @@ def get_anomaly_summary(
         logger.exception("Failed to compute anomaly summary: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate anomaly summary: {exc}",
+            detail="Failed to generate anomaly summary. Internal server error.",
         ) from exc
 
 
@@ -173,7 +174,7 @@ def get_recent_anomalies(
         logger.exception("Failed to retrieve recent anomalies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch recent anomalies: {exc}",
+            detail="Failed to fetch recent anomalies. Internal server error.",
         ) from exc
 
 
@@ -203,5 +204,5 @@ def get_product_anomalies(
         logger.exception("Failed to retrieve product anomalies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch product anomalies: {exc}",
+            detail="Failed to fetch product anomalies. Internal server error.",
         ) from exc
