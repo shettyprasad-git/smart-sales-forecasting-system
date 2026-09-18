@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-188%2F188%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-223%2F223%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -173,6 +173,32 @@ This project addresses the problem by building a complete forecasting pipeline t
 - **Dedicated React UI Tab**: "Recommendations" tab (`Lightbulb` icon) in the Investigation Drawer featuring prominent Human Review Notice, fallback alert badges, executive synthesis card, action cards with risk/priority badges, trade-offs, and verification checklists.
 - **API Endpoint**: `GET /api/recommendations/{anomaly_id}` supporting `refresh` and `fallback` query parameters.
 
+## What-If Scenario Simulation (Phase 6.6)
+
+- **Purpose**: Enables interactive, non-destructive counterfactual exploration of hypothetical commercial scenarios across 7, 30, and 90-day forecast horizons without altering underlying sales history.
+- **Scenario Drivers**:
+  - `demand_multiplier`: Uniform demand shifts (-50% to +50%).
+  - `temporary_shock`: Bounded transient demand shocks reverting to baseline.
+  - `persistent_shift`: Permanent structural changes in baseline volume.
+  - `trend_continuation`: Forward projection of recent 7–90 day velocity.
+  - `promotion_scenario`: Evaluates promotional lift via production ML model.
+  - `holiday_scenario`: Evaluates calendar holiday lift via production ML model.
+- **Strict Elasticity Boundaries**: Price and discount adjustments return explicit `status = "requires_model"` disclaimers, preventing ungrounded price-elasticity assertions.
+- **Numerical Invariants**: Preserves 10 strict mathematical invariants across all runs (daily additivity, delta coherence, non-negative quantities, finite bounds, and date continuity).
+- **API Endpoints**: `POST /api/simulations` and `GET /api/simulations/{id}`.
+
+## Human Approval & Decision Governance (Phase 6.7)
+
+- **Purpose**: Establishes an auditable, enterprise decision governance workflow connecting AI/prescriptive recommendations and simulation findings to accountable human stakeholders.
+- **Strict Non-Autonomous Execution**: Guarantees `human_approval_required: true` and `automatic_execution: false` across all records. Approval explicitly represents human sign-off for manual business execution; no purchase orders, price updates, or inventory reallocations are triggered autonomously.
+- **State Machine Governance**: Formal state machine enforcing transitions: `pending_review` → `approved` / `rejected` / `changes_requested`, `changes_requested` → `pending_review` (resubmit), and terminal immutability for `approved` and `rejected` states. Invalid transitions return HTTP 409 Conflict.
+- **Original Recommendation Immutability**: The machine-generated recommendation is permanently frozen; human revisions are strictly isolated in `modified_action`.
+- **Mandatory Decision Rationale**: Rejections and change requests strictly require human rationales (1–2,000 characters).
+- **Multi-Layer Evidence Snapshotting**: Captures immutable point-in-time JSON snapshots of the recommendation, anomaly investigation evidence, and associated what-if simulation run upon creation.
+- **Immutable Audit Trail**: Chronologically records all lifecycle events (creation, review, notes, modifications, and state transitions) with authenticated actor attribution.
+- **Dedicated React Decision Center**: Interactive UI at `/decisions` and `/decisions/:id` with status filtering, approval/rejection dialogs, proposed vs modified action diffs, audit timelines, and direct review package submission from the Investigation Drawer.
+- **API Endpoints**: `POST /api/decisions`, `GET /api/decisions`, `GET /api/decisions/{id}`, `POST /api/decisions/{id}/approve`, `POST /api/decisions/{id}/reject`, `POST /api/decisions/{id}/request-changes`, and `POST /api/decisions/{id}/resubmit`.
+
 ## Full-Stack Application
 
 - User registration
@@ -212,6 +238,8 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Executive Brief     │
                          │ AI Reasoning Tab    │
                          │ Recommendations Tab │
+                         │ Simulation Panel    │
+                         │ Decision Center     │
                          └──────────┬──────────┘
                                     │
                                REST / JSON
@@ -229,6 +257,8 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Explanations API    │
                          │ AI Reasoning API    │
                          │ Recommendations API │
+                         │ Simulations API     │
+                         │ Decisions API       │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
@@ -239,9 +269,11 @@ This project addresses the problem by building a complete forecasting pipeline t
           │ Users           │             │ Forecast Models  │
           │ Products        │             │ Anomaly Engine   │
           │ Sales Records   │             │ Root-Cause Engine│
-          │                 │             │ Narrative Engine │
-          │                 │             │ Gemini Reasoning │
+          │ Decision Records│             │ Narrative Engine │
+          │ Audit Events    │             │ Gemini Reasoning │
           │                 │             │ Prescriptive Recs│
+          │                 │             │ What-If Simulator│
+          │                 │             │ Governance Engine│
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -520,17 +552,43 @@ backend/
     │   ├── auth.py
     │   ├── forecast.py
     │   ├── products.py
-    │   └── sales.py
+    │   ├── sales.py
+    │   ├── anomalies.py
+    │   ├── investigations.py
+    │   ├── explanations.py
+    │   ├── ai_reasoning.py
+    │   ├── recommendations.py
+    │   ├── simulations.py
+    │   └── decisions.py
     │
     ├── schemas/
     │   ├── auth.py
     │   ├── forecast.py
     │   ├── products.py
-    │   └── sales.py
+    │   ├── sales.py
+    │   ├── anomalies.py
+    │   ├── investigations.py
+    │   ├── explanations.py
+    │   ├── ai_reasoning.py
+    │   ├── recommendations.py
+    │   ├── simulations.py
+    │   └── decisions.py
     │
     ├── services/
     │   ├── forecast_service.py
-    │   └── history_service.py
+    │   ├── history_service.py
+    │   ├── anomaly_service.py
+    │   ├── investigation_service.py
+    │   ├── explanation_service.py
+    │   ├── ai_reasoning_service.py
+    │   ├── recommendation_service.py
+    │   ├── simulation_service.py
+    │   └── decision_service.py
+    │
+    ├── llm/
+    │   ├── provider.py
+    │   ├── gemini_provider.py
+    │   └── prompts.py
     │
     └── database/
         ├── database.py
@@ -760,7 +818,8 @@ frontend/
     │   ├── explanations.js
     │   ├── aiReasoning.js
     │   ├── recommendations.js
-    │   └── simulations.js
+    │   ├── simulations.js
+    │   └── decisions.js
     │
     ├── context/
     │   └── AuthContext.jsx
@@ -781,7 +840,8 @@ frontend/
     │   ├── Modal.jsx
     │   ├── ConfirmDialog.jsx
     │   ├── InvestigationDrawer.jsx
-    │   └── SimulationPanel.jsx
+    │   ├── SimulationPanel.jsx
+    │   └── DecisionReviewPanel.jsx
     │
     ├── pages/
     │   ├── Login.jsx
@@ -792,6 +852,7 @@ frontend/
     │   ├── Forecast.jsx
     │   ├── Anomalies.jsx
     │   ├── Simulation.jsx
+    │   ├── DecisionCenter.jsx
     │   └── NotFound.jsx
     │
     └── utils/
@@ -1175,6 +1236,24 @@ The backend contains automated API and statistical tests covering:
 - Adversarial prompt injection defense
 - Upstream provider error & unconfigured key graceful degradation (HTTP 503)
 - In-memory reasoning cache & cache invalidation (`?refresh=true`)
+- Prescriptive Action Recommendations (`/api/recommendations/{id}`)
+- Deterministic eligibility gating across 8 recommendation categories
+- Non-autonomous governance & human approval required invariant
+- Recommendation-specific supporting evidence grounding
+- Promotion review rejection when promotion is inactive
+- Deterministic fallback engine for high availability
+- What-If Scenario Simulation (`/api/simulations`)
+- 6 counterfactual scenarios (multiplier, shock, persistent shift, trend, promotion, holiday)
+- Elasticity boundaries returning `status = "requires_model"`
+- 10 simulation numerical invariants & zero-data-mutation validation
+- Human Approval & Decision Governance (`/api/decisions`)
+- Decision lifecycle state machine (`pending_review`, `approved`, `rejected`, `changes_requested`, `resubmit`)
+- Immutable original recommendations with distinct `modified_action` preservation
+- Mandatory reviewer rationales for rejections and revisions
+- Immutable append-only audit trail with actor and event metadata tracking
+- Cross-layer point-in-time snapshots (recommendation, anomaly evidence, simulation)
+- Conflict prevention (HTTP 409) on terminal decisions and tenant isolation (HTTP 403)
+- Non-autonomous invariants (`human_approval_required: true`, `automatic_execution: false`)
 - Validation
 - Error handling
 
@@ -1187,7 +1266,7 @@ pytest -q
 Current result:
 
 ```text
-128 passed
+223 passed
 ```
 
 The remaining warnings are dependency-level FastAPI/Starlette/AnyIO warnings and do not represent application test failures.
@@ -1246,9 +1325,22 @@ The production build currently completes successfully.
 - [x] Quantified business impact estimation
 - [x] Deterministic narrative generation without LLM
 - [x] Key driver prioritization & top-N capping
+- [x] Prescriptive Action Recommendations API (`/api/recommendations/{id}`)
+- [x] Deterministic recommendation eligibility gating & causal guardrails
+- [x] Non-autonomous governance & human approval required invariant
+- [x] What-If Scenario Simulation API (`/api/simulations`)
+- [x] 6 counterfactual simulation scenarios & elasticity boundary handling
+- [x] 10 simulation numerical invariants & zero-data-mutation validation
+- [x] Human Approval & Decision Governance API (`/api/decisions`)
+- [x] Decision lifecycle state machine & transition conflict prevention (HTTP 409)
+- [x] Original recommendation immutability & separate modified action storage
+- [x] Mandatory reviewer rationales for rejections and change requests
+- [x] Immutable chronological audit trail events
+- [x] Point-in-time recommendation, anomaly, and simulation snapshot integrity
+- [x] Tenant isolation (HTTP 403) and authentication verification
 - [x] Validation works
 - [x] Error handling works
-- [x] 128/128 tests passing
+- [x] 223/223 tests passing
 
 ## Frontend
 
@@ -1267,6 +1359,11 @@ The production build currently completes successfully.
 - [x] Investigation Drawer with driver ranking & evidence
 - [x] Executive Brief drawer tab & 1-click Markdown clipboard export
 - [x] AI Reasoning drawer tab with insight cards, confidence pills, & risk flags
+- [x] Recommendations drawer tab with action cards, priority badges, & human review notices
+- [x] Interactive Simulation Panel & What-If scenario explorer (`/simulations`)
+- [x] Decision Center page (`/decisions`, `/decisions/:id`) with status filters
+- [x] Decision Review Panel with action dialogs (Approve / Reject / Request Changes)
+- [x] Audit timeline and proposed vs modified action diff view
 - [x] On-demand "Refresh Analysis" trigger
 - [x] Graceful error state banner for HTTP 503 / missing API key
 - [x] Responsive layout
@@ -1437,7 +1534,7 @@ http://127.0.0.1:8000/redoc
 The Smart Sales Forecasting System features a comprehensive, non-autonomous executive intelligence pipeline:
 
 ```text
-DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE → HUMAN APPROVAL
+DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE → HUMAN APPROVAL → AUDIT TRAIL
 ```
 
 ### Phase 6.1 — Sales Anomaly Detection
@@ -1481,6 +1578,24 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
   - `POST /api/simulations`: Authenticated scenario execution with JWT Bearer token.
   - `GET /api/simulations/{id}`: Cached simulation retrieval.
 
+### Phase 6.7 — Human Approval & Decision Governance
+- Enterprise human decision governance over prescriptive recommendations and simulation outcomes.
+- **Strict Non-Autonomous Execution**: `human_approval_required: true` and `automatic_execution: false` are structurally guaranteed across all records. Human approval authorizes human execution; the system never triggers purchase orders, price updates, or inventory reallocations autonomously.
+- **State Machine Lifecycle**: Formal transition paths (`pending_review` → `approved` / `rejected` / `changes_requested`, `changes_requested` → `pending_review`), with terminal immutability for approved/rejected decisions and HTTP 409 conflict protection.
+- **Original Recommendation Immutability**: Frozen original recommendation payload with distinct reviewer adjustments isolated in `modified_action`.
+- **Mandatory Decision Notes**: Explicit rationale enforcement (1–2,000 characters) on rejections and changes requests.
+- **Point-in-Time Evidence Snapshotting**: Deep JSON preservation of recommendation payload, anomaly root-cause attribution, and what-if simulation run upon creation.
+- **Chronological Audit Trail**: Append-only event history capturing actors, timestamps, state transitions, and reviewer rationales.
+- **Dedicated React Decision Center**: Interactive UI at `/decisions` and `/decisions/:id` with status filters, action dialogs (Approve / Reject / Request Changes), audit history timeline, diff view, and 1-click submission from the Investigation Drawer.
+- **API Endpoints**:
+  - `POST /api/decisions`: Package recommendation into an auditable decision record.
+  - `GET /api/decisions`: Filterable and paginated decision listing.
+  - `GET /api/decisions/{id}`: Full decision record with audit events and snapshots.
+  - `POST /api/decisions/{id}/approve`: Approve decision with optional note.
+  - `POST /api/decisions/{id}/reject`: Reject decision with mandatory rationale.
+  - `POST /api/decisions/{id}/request-changes`: Request changes with mandatory rationale.
+  - `POST /api/decisions/{id}/resubmit`: Resubmit modified decision package.
+
 ---
 
 # Development Roadmap
@@ -1512,6 +1627,7 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
 [x] Grounded AI Reasoning Layer (Phase 6.4)
 [x] Prescriptive Action Recommendations (Phase 6.5)
 [x] What-If Scenario Simulation (Phase 6.6)
+[x] Human Approval & Decision Governance (Phase 6.7)
 [ ] Production database
 [ ] Dockerization
 [ ] CI/CD

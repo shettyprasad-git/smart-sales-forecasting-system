@@ -4,6 +4,7 @@ import { getInvestigationApi } from '../api/investigations';
 import { getExplanationApi } from '../api/explanations';
 import { getAIReasoningApi } from '../api/aiReasoning';
 import { getRecommendationsApi } from '../api/recommendations';
+import { createDecisionApi } from '../api/decisions';
 import { extractErrorMessage } from '../api/axios';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -1200,6 +1201,31 @@ ${limitationsList}
                                 </ul>
                               </div>
                             )}
+                          </div>
+
+                          {/* Governance Action Bar */}
+                          <div className="flex items-center justify-end pt-3 border-t border-slate-800/60">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const dec = await createDecisionApi({
+                                    anomaly_id: anomalyId,
+                                    recommendation_type: rec.recommendation_type,
+                                    proposed_action: rec.action,
+                                    recommendation_payload: rec,
+                                  });
+                                  onClose();
+                                  navigate(`/decisions?id=${dec.id}`);
+                                } catch (err) {
+                                  console.error('Failed to submit recommendation for review:', err);
+                                }
+                              }}
+                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Send for Review</span>
+                            </button>
                           </div>
                         </div>
                       ))}

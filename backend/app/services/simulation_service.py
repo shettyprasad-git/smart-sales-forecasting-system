@@ -120,6 +120,9 @@ def validate_simulation_result(response: SimulationResponse) -> None:
             raise ValueError(f"Discontinuous date sequence between {prev_date} and {curr_date}.")
 
 
+_SIMULATION_CACHE: dict[str, SimulationResponse] = {}
+
+
 class SimulationService:
     """
     Production service for what-if scenario simulation.
@@ -132,11 +135,12 @@ class SimulationService:
         forecast_service: BackendForecastService | None = None,
         investigation_service: InvestigationService | None = None,
         llm_provider: LLMProvider | None = None,
+        cache: dict[str, SimulationResponse] | None = None,
     ) -> None:
         self.forecast_service = forecast_service or BackendForecastService()
         self.investigation_service = investigation_service or InvestigationService()
         self.llm_provider = llm_provider or GeminiProvider()
-        self._cache: dict[str, SimulationResponse] = {}
+        self._cache: dict[str, SimulationResponse] = cache if cache is not None else _SIMULATION_CACHE
 
     def get_simulation(self, simulation_id: str) -> SimulationResponse | None:
         """Retrieve a cached simulation result by ID."""

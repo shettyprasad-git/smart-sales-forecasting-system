@@ -7,6 +7,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,6 +44,12 @@ class User(Base):
 
     sales_records: Mapped[list["SalesRecord"]] = relationship(
         "SalesRecord",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    decisions: Mapped[list["DecisionRecord"]] = relationship(
+        "DecisionRecord",
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -175,5 +182,174 @@ class SalesRecord(Base):
     product: Mapped["Product"] = relationship(
         "Product",
         back_populates="sales_records",
+    )
+
+
+class DecisionRecord(Base):
+    __tablename__ = "decisions"
+
+    id: Mapped[str] = mapped_column(
+        String(50),
+        primary_key=True,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    recommendation_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+
+    anomaly_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+
+    simulation_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+    )
+
+    recommendation_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    proposed_action: Mapped[str] = mapped_column(
+        String(2000),
+        nullable=False,
+    )
+
+    modified_action: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending_review",
+        nullable=False,
+        index=True,
+    )
+
+    rationale: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+    )
+
+    decision_note: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+    )
+
+    evidence_snapshot: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+
+    simulation_snapshot: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="decisions",
+    )
+
+    audit_events: Mapped[list["DecisionAuditEvent"]] = relationship(
+        "DecisionAuditEvent",
+        back_populates="decision",
+        cascade="all, delete-orphan",
+        order_by="DecisionAuditEvent.created_at.asc()",
+    )
+
+
+class DecisionAuditEvent(Base):
+    __tablename__ = "decision_audit_events"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    decision_id: Mapped[str] = mapped_column(
+        ForeignKey("decisions.id"),
+        nullable=False,
+        index=True,
+    )
+
+    actor_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    event_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    previous_status: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    new_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    note: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+    )
+
+    event_metadata: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    decision: Mapped["DecisionRecord"] = relationship(
+        "DecisionRecord",
+        back_populates="audit_events",
+    )
+
+    actor: Mapped["User"] = relationship(
+        "User",
     )
 
