@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Sliders,
   TrendingUp,
@@ -9,6 +9,7 @@ import {
   BrainCircuit,
   Info,
   ShieldAlert,
+  ShieldCheck,
   ArrowUpRight,
   ArrowDownRight,
   Layers,
@@ -17,6 +18,7 @@ import {
   IndianRupee,
   Activity,
   FileText,
+  ArrowRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -31,6 +33,7 @@ import {
 
 import SimulationPanel from '../components/SimulationPanel';
 import { runSimulationApi } from '../api/simulations';
+import { createDecisionApi } from '../api/decisions';
 import { formatCurrency, formatQuantity, formatDate, formatPercent, formatNumber } from '../utils/formatters';
 
 const CustomChartTooltip = ({ active, payload, label }) => {
@@ -100,7 +103,9 @@ const CustomChartTooltip = ({ active, payload, label }) => {
 
 const Simulation = () => {
   const [searchParams] = useSearchParams();
-  const initialAnomalyId = searchParams.get('anomaly_id') || '';
+  const location = useLocation();
+  const navigate = useNavigate();
+  const initialAnomalyId = searchParams.get('anomaly_id') || location.state?.anomalyId || '';
 
   // Configuration State
   const [scenarioType, setScenarioType] = useState('demand_multiplier');
@@ -118,11 +123,48 @@ const Simulation = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [simulationResult, setSimulationResult] = useState(null);
+  const [submittingDecision, setSubmittingDecision] = useState(false);
+  const [decisionSuccess, setDecisionSuccess] = useState(null);
+
+  useEffect(() => {
+    const incomingAnomalyId = searchParams.get('anomaly_id') || location.state?.anomalyId;
+    if (incomingAnomalyId && incomingAnomalyId !== anomalyId) {
+      setAnomalyId(incomingAnomalyId);
+    }
+  }, [searchParams, location.state]);
 
   // Auto-run when anchored from query param or on initial mount
   useEffect(() => {
     handleRunSimulation();
   }, []);
+
+  const handleSendToDecisionReview = async () => {
+    if (!simulationResult) return;
+    try {
+      setSubmittingDecision(true);
+      setError(null);
+      const deltaQty = simulationResult.summary?.quantity_delta ?? 0;
+      const baseQty = simulationResult.summary?.baseline_quantity ?? 0;
+      const scenQty = simulationResult.summary?.scenario_quantity ?? 0;
+      const payload = {
+        recommendation_type: 'forecast_review',
+        proposed_action: `Evaluate hypothetical ${simulationResult.scenario_type.replace('_', ' ')} scenario over ${simulationResult.horizon_days} days (Projected volume variance: ${formatNumber(deltaQty)} units).`,
+        anomaly_id: simulationResult.anomaly_id || null,
+        simulation_id: simulationResult.simulation_id || null,
+        decision_note: `What-if simulation submitted for executive review. Baseline: ${formatNumber(baseQty)} units, Scenario: ${formatNumber(scenQty)} units.`,
+      };
+      const created = await createDecisionApi(payload);
+      setDecisionSuccess(`Successfully submitted to Decision Center (ID: ${created.id}). Redirecting...`);
+      setTimeout(() => {
+        navigate(`/decisions?id=${created.id}`);
+      }, 700);
+    } catch (err) {
+      console.error('Failed to submit simulation to Decision Center:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to submit simulation to Decision Center.');
+    } finally {
+      setSubmittingDecision(false);
+    }
+  };
 
   const handleRunSimulation = async () => {
     setLoading(true);
@@ -581,6 +623,38 @@ const Simulation = () => {
                     ))}
                   </ul>
                 </div>
+              </div>
+
+              {/* Decision Center Integration Card */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-500/30 shadow-xl">
+                <div>
+                  <div className="flex items-center space-x-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Executive Decision Center Integration</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-100 mt-0.5">
+                    Promote Scenario to Governance Review Queue
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Anchor this hypothetical simulation to a formal decision record awaiting human review and sign-off.
+                  </p>
+                  {decisionSuccess && (
+                    <p className="text-xs font-semibold text-emerald-400 mt-2 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                      {decisionSuccess}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendToDecisionReview}
+                  disabled={submittingDecision}
+                  className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-950/50 transition-all cursor-pointer disabled:opacity-50 self-start sm:self-auto flex-shrink-0"
+                >
+                  <ShieldCheck className="w-4 h-4 text-indigo-200" />
+                  <span>{submittingDecision ? 'Submitting...' : 'Send to Decision Center'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {/* Human Approval Required Banner */}

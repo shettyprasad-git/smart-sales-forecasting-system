@@ -224,8 +224,9 @@ const AlertCard = ({
                 disabled={actionLoading}
                 onClick={() => onResolve?.(alert.id)}
                 className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-950/60 text-emerald-300 hover:bg-emerald-900/80 border border-emerald-800/70 transition-colors disabled:opacity-50"
+                title="Mark this alert as resolved by human operator"
               >
-                Resolve
+                Mark Resolved
               </button>
               <button
                 type="button"

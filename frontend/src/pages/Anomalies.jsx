@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { getAnomaliesApi } from '../api/anomalies';
 import { extractErrorMessage } from '../api/axios';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -56,10 +57,23 @@ const SEVERITY_CONFIG = {
 };
 
 const Anomalies = () => {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [anomaliesData, setAnomaliesData] = useState(null);
   const [selectedAnomalyId, setSelectedAnomalyId] = useState(null);
+
+  useEffect(() => {
+    const incomingId =
+      location.state?.anomalyId ||
+      searchParams.get('anomaly_id') ||
+      searchParams.get('id');
+    if (incomingId) {
+      setSelectedAnomalyId(incomingId);
+    }
+  }, [location.state, searchParams]);
 
   // Filter states
   const [metricFilter, setMetricFilter] = useState('');

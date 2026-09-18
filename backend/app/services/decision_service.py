@@ -121,6 +121,11 @@ class DecisionService:
         rec_snapshot: RecommendationSnapshot
         if request.recommendation_payload:
             payload = request.recommendation_payload
+            supp_ev = payload.get("supporting_evidence")
+            if isinstance(supp_ev, str):
+                supp_ev = [supp_ev]
+            elif not supp_ev:
+                supp_ev = []
             rec_snapshot = RecommendationSnapshot(
                 recommendation_id=payload.get("recommendation_id") or request.recommendation_id or f"rec-{uuid.uuid4().hex[:8]}",
                 recommendation_type=payload.get("recommendation_type") or request.recommendation_type,
@@ -129,7 +134,7 @@ class DecisionService:
                 priority=payload.get("priority"),
                 risk=payload.get("risk"),
                 confidence=payload.get("confidence"),
-                supporting_evidence=payload.get("supporting_evidence") or [],
+                supporting_evidence=supp_ev,
                 assumptions=payload.get("assumptions") or [],
                 tradeoffs=payload.get("tradeoffs") or [],
                 limitations=payload.get("limitations") or [],

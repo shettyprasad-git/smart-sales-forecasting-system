@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-258%2F258%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-280%2F280%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -1664,6 +1664,40 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
   - `GET /api/monitoring/summary`: Executive monitoring KPI telemetry.
   - `GET /api/monitoring/runs`: Observability history of monitoring runs.
 
+### Phase 6.9 — Intelligence Platform Integration & Stabilization
+- **Unified Executive Intelligence Workflow**: Complete seamless integration from anomaly detection to governance and proactive monitoring:
+  $$\text{DETECT} \rightarrow \text{INVESTIGATE} \rightarrow \text{EXPLAIN} \rightarrow \text{AI REASONING} \rightarrow \text{RECOMMEND} \rightarrow \text{SIMULATE} \rightarrow \text{HUMAN APPROVAL} \rightarrow \text{AUDIT TRAIL} \rightarrow \text{MONITOR} \rightarrow \text{ALERT}$$
+- **Executive Dashboard Modernization**:
+  - Live enterprise telemetry widgets integrating real-time intelligence feeds (`GET /api/monitoring/summary`, `GET /api/decisions?status=pending_review`).
+  - Active commercial alerts count, critical attention indicators, pending governance reviews badge, anomaly tally, and what-if simulation launcher.
+  - Complete standardization to Indian Rupee (`₹`) monetary formatting and icons across all summary cards.
+  - 1-click quick-action navigation to Intelligence Monitor, Decision Center, What-If Simulator, and Anomaly Investigations.
+- **Route-Level Code Splitting & Performance Optimization**:
+  - Implemented dynamic route splitting using `React.lazy()` and `<Suspense>` across all major analytical pages (`Dashboard`, `IntelligenceMonitor`, `DecisionCenter`, `Simulation`, `Anomalies`, `Forecast`, `Products`, `Sales`).
+  - Core vendor chunk bundle optimized under 350 kB (318.8 kB), completely eliminating monolithic Vite bundle warnings.
+- **Cross-Feature Navigational Continuity (Flows A–H)**:
+  - Strict preservation of entity IDs (`anomaly_id`, `recommendation_id`, `simulation_id`, `decision_id`, `alert_id`) across state parameters and URL query parameters.
+  - Context-preserving 1-click cross-feature transitions:
+    - *Flow A*: Dashboard $\rightarrow$ Intelligence Monitor (`/intelligence`)
+    - *Flow B*: Alert Card $\rightarrow$ Anomaly Investigation Drawer (`/anomalies`)
+    - *Flow C*: Anomaly Investigation $\rightarrow$ Prescriptive Recommendations $\rightarrow$ Decision Center (`/decisions`)
+    - *Flow D*: Anomaly Investigation $\rightarrow$ What-If Scenario Simulator (`/simulation?anomaly_id=...`)
+    - *Flow E*: Simulation Results $\rightarrow$ Decision Center Submission (`/decisions?id=...`)
+    - *Flow F*: Decision Review Panel $\rightarrow$ Root-Cause Investigation & Simulation Verification
+    - *Flow G*: Decision Lifecycle (Approve / Reject / Request Changes / Resubmit)
+    - *Flow H*: Alert Lifecycle (Acknowledge / Mark Resolved / Dismiss)
+- **Executive Terminology & Non-Autonomous Invariant Enforcement**:
+  - Empirical observational associations explicitly framed as "associated contributor" or "associated factor" rather than counterfactual causality.
+  - What-If simulations framed as "scenarios" and "hypothetical projections" under explicit constant baseline price assumptions, distinct from ML forecasts.
+  - Clear human agency affirmed with "human approved" decisions and "marked resolved" alerts.
+  - `human_approval_required: true` and `automatic_execution: false` strictly enforced across all database models, API schemas, and UI action panels.
+- **Gemini Operational Boundaries**:
+  - Gemini LLM strictly bounded to strategic reasoning synthesis; zero numerical calculation, zero severity/priority scoring, and zero automated transaction execution.
+- **Enterprise Error Resiliency**:
+  - Standardized, sanitized error response contracts across 401, 403, 404, 409, 422, and 500 status codes with zero leakage of internal stack traces or server file paths.
+- **Comprehensive End-to-End Integration Suite**:
+  - 22 new end-to-end integration tests in `tests/test_intelligence_end_to_end.py` covering the complete 10-step lifecycle, state machines, immutability, data safety, and error contracts.
+
 ---
 
 # Development Roadmap
@@ -1697,11 +1731,11 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
 [x] What-If Scenario Simulation (Phase 6.6)
 [x] Human Approval & Decision Governance (Phase 6.7)
 [x] Proactive Intelligence & Monitoring (Phase 6.8)
+[x] Intelligence Platform Integration & Stabilization (Phase 6.9)
 [ ] Production database
 [ ] Dockerization
 [ ] CI/CD
 [ ] Cloud deployment
-[ ] Monitoring
 ```
 
 ---

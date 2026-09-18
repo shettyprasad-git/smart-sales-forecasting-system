@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   XCircle,
@@ -32,6 +33,7 @@ const STATUS_BADGES = {
 };
 
 const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
+  const navigate = useNavigate();
   const [modifiedAction, setModifiedAction] = useState(
     decision.modified_action || decision.proposed_action || ''
   );
@@ -245,6 +247,18 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
                   </ul>
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  onClose?.();
+                  navigate('/anomalies', { state: { anomalyId: decision.anomaly_id } });
+                }}
+                className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold transition-all cursor-pointer w-full justify-center"
+              >
+                <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Open Full Anomaly Investigation</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           ) : (
             <p className="text-xs text-slate-400 italic">No direct anomaly ID anchored.</p>
@@ -289,9 +303,37 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
                   </ul>
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  onClose?.();
+                  navigate(decision.anomaly_id ? `/simulation?anomaly_id=${decision.anomaly_id}` : '/simulation');
+                }}
+                className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition-all cursor-pointer w-full justify-center"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Open in What-If Simulator</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           ) : (
-            <p className="text-xs text-slate-400 italic">No what-if simulation attached to this decision.</p>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-400 italic">No what-if simulation attached to this decision.</p>
+              {decision.anomaly_id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose?.();
+                    navigate(`/simulation?anomaly_id=${decision.anomaly_id}`);
+                  }}
+                  className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition-all cursor-pointer w-full justify-center"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Simulate This Anomaly</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams } from 'react-router-dom';
 import {
   ShieldCheck,
   Clock,
@@ -36,8 +36,9 @@ const STATUS_BADGES = {
 };
 
 const DecisionCenter = () => {
+  const { id: routeId } = useParams();
   const [searchParams] = useSearchParams();
-  const directId = searchParams.get('id');
+  const directId = routeId || searchParams.get('id');
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [decisions, setDecisions] = useState([]);

@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from enum import Enum
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class DecisionStatus(str, Enum):
@@ -25,6 +25,15 @@ class RecommendationSnapshot(BaseModel):
     assumptions: list[str] = Field(default_factory=list, description="Explicit assumptions")
     tradeoffs: list[str] = Field(default_factory=list, description="Evaluated trade-offs")
     limitations: list[str] = Field(default_factory=list, description="Identified limitations")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_evidence(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            ev = data.get("supporting_evidence")
+            if isinstance(ev, str):
+                data["supporting_evidence"] = [ev]
+        return data
 
 
 class AnomalySnapshot(BaseModel):

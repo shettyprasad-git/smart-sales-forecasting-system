@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDashboardApi } from '../api/forecast';
+import { getMonitoringSummary } from '../api/monitoring';
+import { listDecisionsApi } from '../api/decisions';
 import { extractErrorMessage } from '../api/axios';
 import KpiCard from '../components/KpiCard';
 import SalesChart from '../components/SalesChart';
@@ -9,20 +12,30 @@ import ErrorMessage from '../components/ErrorMessage';
 import {
   Package,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Activity,
   Sparkles,
   Calendar,
   Cpu,
+  ShieldAlert,
+  ShieldCheck,
+  Sliders,
+  Bell,
+  ArrowRight,
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../utils/formatters';
 import { FORECAST_HORIZONS, MODEL_DESCRIPTIONS } from '../utils/constants';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [horizon, setHorizon] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+
+  // Intelligence Platform Telemetry
+  const [intelSummary, setIntelSummary] = useState(null);
+  const [pendingDecisionsCount, setPendingDecisionsCount] = useState(0);
 
   const fetchDashboard = useCallback(async (selectedHorizon) => {
     try {
@@ -37,9 +50,29 @@ const Dashboard = () => {
     }
   }, []);
 
+  const fetchIntelligenceData = useCallback(async () => {
+    try {
+      const [summaryRes, decisionsRes] = await Promise.allSettled([
+        getMonitoringSummary(),
+        listDecisionsApi({ status: 'pending_review' }),
+      ]);
+      if (summaryRes.status === 'fulfilled') {
+        setIntelSummary(summaryRes.value);
+      }
+      if (decisionsRes.status === 'fulfilled') {
+        setPendingDecisionsCount(
+          Array.isArray(decisionsRes.value) ? decisionsRes.value.length : 0
+        );
+      }
+    } catch {
+      // Non-blocking telemetry fallback
+    }
+  }, []);
+
   useEffect(() => {
     fetchDashboard(horizon);
-  }, [horizon, fetchDashboard]);
+    fetchIntelligenceData();
+  }, [horizon, fetchDashboard, fetchIntelligenceData]);
 
   const handleHorizonChange = (newHorizon) => {
     if (newHorizon !== horizon) {
@@ -100,6 +133,161 @@ const Dashboard = () => {
         <LoadingSpinner text="Connecting to ML backend & computing dashboard telemetry..." size="lg" />
       ) : (
         <>
+          {/* Executive Financial Intelligence & Proactive Governance Section */}
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/90 p-6 shadow-2xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+              <div>
+                <div className="flex items-center space-x-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Executive Financial Intelligence & Proactive Monitoring</span>
+                </div>
+                <h2 className="text-lg font-extrabold text-slate-100 tracking-tight mt-0.5">
+                  Real-Time Intelligence & Human Decision Governance
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Continuous statistical scanning across demand anomalies, prescriptive actions, and human-in-the-loop approvals.
+                </p>
+              </div>
+
+              {/* Quick Jump Links */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/intelligence')}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 transition-all cursor-pointer"
+                >
+                  <Bell className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Alert Feed</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/decisions')}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-600/10 hover:bg-amber-600/20 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Decisions</span>
+                  {pendingDecisionsCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-mono text-[10px] font-bold">
+                      {pendingDecisionsCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/simulation')}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>What-If</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Intelligence KPI Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Active Alerts */}
+              <div
+                onClick={() => navigate('/intelligence')}
+                className="rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-indigo-500/40 p-4 transition-all duration-200 cursor-pointer group shadow-inner"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span className="font-semibold uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+                    <Bell className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Unresolved Alerts</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    {intelSummary?.critical_alerts ?? 0} Critical
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-slate-100 font-mono tracking-tight group-hover:text-indigo-300 transition-colors">
+                  {intelSummary?.unresolved_alerts ?? '0'}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+                  <span>{intelSummary?.new_alerts ?? 0} newly surfaced</span>
+                  <span className="text-indigo-400 group-hover:translate-x-0.5 transition-transform flex items-center">
+                    Review <ArrowRight className="w-3 h-3 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Pending Decisions */}
+              <div
+                onClick={() => navigate('/decisions')}
+                className="rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-amber-500/40 p-4 transition-all duration-200 cursor-pointer group shadow-inner"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span className="font-semibold uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Governance Reviews</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    Human Gate
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-slate-100 font-mono tracking-tight group-hover:text-amber-300 transition-colors">
+                  {pendingDecisionsCount}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+                  <span>Awaiting human approval</span>
+                  <span className="text-amber-400 group-hover:translate-x-0.5 transition-transform flex items-center">
+                    Decide <ArrowRight className="w-3 h-3 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Detected Anomalies */}
+              <div
+                onClick={() => navigate('/anomalies')}
+                className="rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-indigo-500/40 p-4 transition-all duration-200 cursor-pointer group shadow-inner"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span className="font-semibold uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Sales Anomalies</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                    Statistical
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-slate-100 font-mono tracking-tight group-hover:text-indigo-300 transition-colors">
+                  {intelSummary?.total_anomalies ?? 'Active'}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+                  <span>Root-cause telemetry</span>
+                  <span className="text-indigo-400 group-hover:translate-x-0.5 transition-transform flex items-center">
+                    Investigate <ArrowRight className="w-3 h-3 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+
+              {/* What-If Simulation Sandbox */}
+              <div
+                onClick={() => navigate('/simulation')}
+                className="rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-emerald-500/40 p-4 transition-all duration-200 cursor-pointer group shadow-inner"
+              >
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span className="font-semibold uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>What-If Sandbox</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                    Hypothetical
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight group-hover:text-emerald-300 transition-colors">
+                  Simulator
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+                  <span>Counterfactual scenarios</span>
+                  <span className="text-emerald-400 group-hover:translate-x-0.5 transition-transform flex items-center">
+                    Simulate <ArrowRight className="w-3 h-3 ml-0.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* KPI Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
@@ -112,7 +300,7 @@ const Dashboard = () => {
             <KpiCard
               title="Total Sales Revenue"
               value={formatCurrency(kpis.total_historical_sales || 0)}
-              icon={DollarSign}
+              icon={IndianRupee}
               description="Gross historical sales amount"
               color="indigo"
             />
@@ -183,7 +371,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
               <div>
                 <h3 className="text-base font-bold text-slate-100 flex items-center space-x-2">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  <IndianRupee className="w-4 h-4 text-emerald-400" />
                   <span>Historical Revenue & Profit Trend</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">

@@ -1,20 +1,21 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
+import LoadingSpinner from './components/LoadingSpinner';
 
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Products from './pages/Products';
-import Sales from './pages/Sales';
-import Forecast from './pages/Forecast';
-import Anomalies from './pages/Anomalies';
-import Simulation from './pages/Simulation';
-import DecisionCenter from './pages/DecisionCenter';
-import IntelligenceMonitor from './pages/IntelligenceMonitor';
-import NotFound from './pages/NotFound';
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Products = lazy(() => import('./pages/Products'));
+const Sales = lazy(() => import('./pages/Sales'));
+const Forecast = lazy(() => import('./pages/Forecast'));
+const Anomalies = lazy(() => import('./pages/Anomalies'));
+const Simulation = lazy(() => import('./pages/Simulation'));
+const DecisionCenter = lazy(() => import('./pages/DecisionCenter'));
+const IntelligenceMonitor = lazy(() => import('./pages/IntelligenceMonitor'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Root redirect handler
 const RootRedirect = () => {
@@ -25,32 +26,40 @@ const RootRedirect = () => {
 
 const AppContent = () => {
   return (
-    <Routes>
-      {/* Public Auth Routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-slate-950">
+          <LoadingSpinner size="lg" text="Loading executive workspace..." />
+        </div>
+      }
+    >
+      <Routes>
+        {/* Public Auth Routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      {/* Root redirect */}
-      <Route path="/" element={<RootRedirect />} />
+        {/* Root redirect */}
+        <Route path="/" element={<RootRedirect />} />
 
-      {/* Guarded Executive Workspace Routes */}
-      <Route element={<ProtectedRoute />}>
-        <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/forecast" element={<Forecast />} />
-          <Route path="/anomalies" element={<Anomalies />} />
-          <Route path="/simulation" element={<Simulation />} />
-          <Route path="/decisions" element={<DecisionCenter />} />
-          <Route path="/decisions/:id" element={<DecisionCenter />} />
-          <Route path="/intelligence" element={<IntelligenceMonitor />} />
+        {/* Guarded Executive Workspace Routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/forecast" element={<Forecast />} />
+            <Route path="/anomalies" element={<Anomalies />} />
+            <Route path="/simulation" element={<Simulation />} />
+            <Route path="/decisions" element={<DecisionCenter />} />
+            <Route path="/decisions/:id" element={<DecisionCenter />} />
+            <Route path="/intelligence" element={<IntelligenceMonitor />} />
+          </Route>
         </Route>
-      </Route>
 
-      {/* Fallback 404 Route */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* Fallback 404 Route */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
 };
 
