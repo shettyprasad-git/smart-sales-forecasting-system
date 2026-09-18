@@ -9,7 +9,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4-06B6D4.svg)](https://tailwindcss.com/)
 [![Scikit--learn](https://img.shields.io/badge/Scikit--learn-ML-F7931E.svg)](https://scikit-learn.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-LSTM-FF6F00.svg)](https://www.tensorflow.org/)
-[![Tests](https://img.shields.io/badge/Backend%20Tests-223%2F223%20Passing-success.svg)](#testing)
+[![Tests](https://img.shields.io/badge/Backend%20Tests-258%2F258%20Passing-success.svg)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -199,6 +199,19 @@ This project addresses the problem by building a complete forecasting pipeline t
 - **Dedicated React Decision Center**: Interactive UI at `/decisions` and `/decisions/:id` with status filtering, approval/rejection dialogs, proposed vs modified action diffs, audit timelines, and direct review package submission from the Investigation Drawer.
 - **API Endpoints**: `POST /api/decisions`, `GET /api/decisions`, `GET /api/decisions/{id}`, `POST /api/decisions/{id}/approve`, `POST /api/decisions/{id}/reject`, `POST /api/decisions/{id}/request-changes`, and `POST /api/decisions/{id}/resubmit`.
 
+## Proactive Intelligence & Monitoring (Phase 6.8)
+
+- **Purpose**: Proactively evaluates sales data to identify newly significant commercial shifts, spikes, drops, category movements, and repeated patterns, surfacing prioritized alerts for human attention.
+- **Strict Non-Autonomous Operational Guarantee**: Monitoring produces ALERTS only. Structurally never executes automated price changes, inventory adjustments, purchase orders, promotional actions, or recommendation approvals. Every alert remains subject to the existing Human Approval governance layer.
+- **Materiality & Priority Scoring**: Leverages empirical robust z-score statistical significance to assign operational priorities (`urgent`, `high`, `medium`, `low`). Low-severity anomalies are suppressed unless participating in repeated anomaly patterns.
+- **Repeated Anomaly Pattern Detection**: Flags frequency clusters across identical metrics and scopes as `repeated_anomaly`, highlighting persistent commercial behavior without asserting ungrounded causal claims.
+- **Deterministic Alert Fingerprinting & Duplicate Suppression**: Prevents alert fatigue by computing unique fingerprint hashes (`{date}_{metric}_{entity_type}_{entity_id}_{alert_type}`). Automatically suppresses duplicate unresolved alerts and reports suppression metrics.
+- **Evidence Snapshotting**: Captures point-in-time anomaly investigation metrics, driver attributions, and revenue impact at scan time without mutating underlying data.
+- **Alert Lifecycle Governance**: Enforces human-controlled states: `new` → `acknowledged` → `resolved` (or `dismissed`). Invalid transitions return HTTP 409 Conflict.
+- **Deep Workflow Integration**: Every alert links seamlessly to Root-Cause Investigation (`InvestigationDrawer`), What-If Simulation (`/simulation`), and Prescriptive Decision Review (`/decisions`).
+- **Notification Boundary**: Phase 6.8 establishes the in-app intelligence alert center; external delivery channels (Email/SMS/WhatsApp/Webhooks) are designed as future extension points with zero side effects.
+- **API Endpoints**: `POST /api/monitoring/run`, `GET /api/monitoring/alerts`, `GET /api/monitoring/alerts/{id}`, `POST /api/monitoring/alerts/{id}/acknowledge`, `POST /api/monitoring/alerts/{id}/resolve`, `POST /api/monitoring/alerts/{id}/dismiss`, `GET /api/monitoring/summary`, and `GET /api/monitoring/runs`.
+
 ## Full-Stack Application
 
 - User registration
@@ -240,6 +253,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Recommendations Tab │
                          │ Simulation Panel    │
                          │ Decision Center     │
+                         │ Intelligence Monitor│
                          └──────────┬──────────┘
                                     │
                                REST / JSON
@@ -259,6 +273,7 @@ This project addresses the problem by building a complete forecasting pipeline t
                          │ Recommendations API │
                          │ Simulations API     │
                          │ Decisions API       │
+                         │ Monitoring API      │
                          └───────┬─────┬───────┘
                                  │     │
                     ┌────────────┘     └────────────┐
@@ -271,9 +286,10 @@ This project addresses the problem by building a complete forecasting pipeline t
           │ Sales Records   │             │ Root-Cause Engine│
           │ Decision Records│             │ Narrative Engine │
           │ Audit Events    │             │ Gemini Reasoning │
-          │                 │             │ Prescriptive Recs│
-          │                 │             │ What-If Simulator│
+          │ MonitoringAlerts│             │ Prescriptive Recs│
+          │ Monitoring Runs │             │ What-If Simulator│
           │                 │             │ Governance Engine│
+          │                 │             │ Proactive Monitor│
           └─────────────────┘             └──────────────────┘
 ```
 
@@ -559,7 +575,8 @@ backend/
     │   ├── ai_reasoning.py
     │   ├── recommendations.py
     │   ├── simulations.py
-    │   └── decisions.py
+    │   ├── decisions.py
+    │   └── monitoring.py
     │
     ├── schemas/
     │   ├── auth.py
@@ -572,7 +589,8 @@ backend/
     │   ├── ai_reasoning.py
     │   ├── recommendations.py
     │   ├── simulations.py
-    │   └── decisions.py
+    │   ├── decisions.py
+    │   └── monitoring.py
     │
     ├── services/
     │   ├── forecast_service.py
@@ -583,7 +601,8 @@ backend/
     │   ├── ai_reasoning_service.py
     │   ├── recommendation_service.py
     │   ├── simulation_service.py
-    │   └── decision_service.py
+    │   ├── decision_service.py
+    │   └── monitoring_service.py
     │
     ├── llm/
     │   ├── provider.py
@@ -819,7 +838,8 @@ frontend/
     │   ├── aiReasoning.js
     │   ├── recommendations.js
     │   ├── simulations.js
-    │   └── decisions.js
+    │   ├── decisions.js
+    │   └── monitoring.js
     │
     ├── context/
     │   └── AuthContext.jsx
@@ -841,7 +861,9 @@ frontend/
     │   ├── ConfirmDialog.jsx
     │   ├── InvestigationDrawer.jsx
     │   ├── SimulationPanel.jsx
-    │   └── DecisionReviewPanel.jsx
+    │   ├── DecisionReviewPanel.jsx
+    │   ├── AlertCard.jsx
+    │   └── MonitoringSummary.jsx
     │
     ├── pages/
     │   ├── Login.jsx
@@ -853,6 +875,7 @@ frontend/
     │   ├── Anomalies.jsx
     │   ├── Simulation.jsx
     │   ├── DecisionCenter.jsx
+    │   ├── IntelligenceMonitor.jsx
     │   └── NotFound.jsx
     │
     └── utils/
@@ -1254,6 +1277,17 @@ The backend contains automated API and statistical tests covering:
 - Cross-layer point-in-time snapshots (recommendation, anomaly evidence, simulation)
 - Conflict prevention (HTTP 409) on terminal decisions and tenant isolation (HTTP 403)
 - Non-autonomous invariants (`human_approval_required: true`, `automatic_execution: false`)
+- Proactive Intelligence & Monitoring (`/api/monitoring`)
+- Automated detection of sales spikes, drops, category deviations, and demand shifts
+- Materiality threshold gating based on robust z-scores and deviation percentage
+- Frequency analysis & repeated anomaly pattern detection
+- Deterministic fingerprint computation (`{date}_{metric}_{entity_type}_{entity_id}_{alert_type}`)
+- Automatic duplicate alert suppression for unresolved events
+- Alert lifecycle state transitions (`new` → `acknowledged` → `resolved`, `dismissed`)
+- State machine conflict rejection (HTTP 409) for finalized alerts
+- Investigation, simulation, and decision review cross-layer linkage
+- Zero mutation of historical sales records, products, or decision records
+- Non-autonomous operational invariants (`human_review_required: true`, `automatic_execution: false`)
 - Validation
 - Error handling
 
@@ -1266,7 +1300,7 @@ pytest -q
 Current result:
 
 ```text
-223 passed
+258 passed
 ```
 
 The remaining warnings are dependency-level FastAPI/Starlette/AnyIO warnings and do not represent application test failures.
@@ -1338,9 +1372,18 @@ The production build currently completes successfully.
 - [x] Immutable chronological audit trail events
 - [x] Point-in-time recommendation, anomaly, and simulation snapshot integrity
 - [x] Tenant isolation (HTTP 403) and authentication verification
+- [x] Proactive Intelligence & Monitoring API (`/api/monitoring`)
+- [x] Deterministic materiality scoring & priority classification
+- [x] Frequency-based repeated anomaly pattern detection
+- [x] Deterministic alert fingerprinting & duplicate suppression
+- [x] Alert lifecycle state machine (`new`, `acknowledged`, `resolved`, `dismissed`)
+- [x] State transition conflict rejection (HTTP 409)
+- [x] Monitoring run observability logging (`MonitoringRun`)
+- [x] Cross-layer linking (Investigation, Simulation, Decision Governance)
+- [x] Zero mutation of sales records, products, or decisions
 - [x] Validation works
 - [x] Error handling works
-- [x] 223/223 tests passing
+- [x] 258/258 tests passing
 
 ## Frontend
 
@@ -1364,6 +1407,11 @@ The production build currently completes successfully.
 - [x] Decision Center page (`/decisions`, `/decisions/:id`) with status filters
 - [x] Decision Review Panel with action dialogs (Approve / Reject / Request Changes)
 - [x] Audit timeline and proposed vs modified action diff view
+- [x] Intelligence Monitor page (`/intelligence`) with status, severity, and type filters
+- [x] Proactive monitoring summary KPI telemetry (`MonitoringSummary`)
+- [x] Alert cards with priority/severity badges and state transitions (`AlertCard`)
+- [x] Interactive "Run Monitoring Scan" with real-time feedback banner
+- [x] Alert detail drawer with connected workflows & governance notice
 - [x] On-demand "Refresh Analysis" trigger
 - [x] Graceful error state banner for HTTP 503 / missing API key
 - [x] Responsive layout
@@ -1534,7 +1582,7 @@ http://127.0.0.1:8000/redoc
 The Smart Sales Forecasting System features a comprehensive, non-autonomous executive intelligence pipeline:
 
 ```text
-DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE → HUMAN APPROVAL → AUDIT TRAIL
+DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE → HUMAN APPROVAL → AUDIT TRAIL → MONITOR → ALERT
 ```
 
 ### Phase 6.1 — Sales Anomaly Detection
@@ -1596,6 +1644,26 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
   - `POST /api/decisions/{id}/request-changes`: Request changes with mandatory rationale.
   - `POST /api/decisions/{id}/resubmit`: Resubmit modified decision package.
 
+### Phase 6.8 — Proactive Intelligence & Monitoring
+- In-app proactive intelligence engine periodically evaluating sales data to identify newly significant commercial shifts, demand changes, and repeated patterns.
+- **Strict Non-Autonomous Operational Guarantee**: Monitoring produces ALERTS only. The system structurally never executes automated price changes, inventory adjustments, purchase orders, promotional actions, or recommendation approvals. Every alert remains subject to the existing Human Approval governance layer.
+- **Materiality & Priority Scoring**: Classifies operational priority (`urgent`, `high`, `medium`, `low`) deterministically based on robust z-score statistical significance and relative percentage deviation ($\ge 15\%$). Low-severity deviations are filtered out unless repeated.
+- **Repeated Anomaly Pattern Detection**: Analyzes frequency clusters across identical metrics and scopes to flag chronic or recurring operational issues (`alert_type = "repeated_anomaly"`).
+- **Deterministic Alert Fingerprinting & Duplicate Suppression**: Computes unique fingerprint hashes (`{date}_{metric}_{entity_type}_{entity_id}_{alert_type}`) to suppress duplicate unresolved alerts and prevent alert fatigue.
+- **Evidence Snapshotting**: Captures point-in-time anomaly investigation metrics, driver attributions, and revenue impact at scan time without mutating underlying data.
+- **Alert Lifecycle Governance**: State machine tracking `new` → `acknowledged` → `resolved` (or `dismissed`), with HTTP 409 conflict protection against invalid transitions.
+- **Deep Workflow Integration**: Every alert links seamlessly to Root-Cause Investigation (`InvestigationDrawer`), What-If Simulation (`/simulation`), and Prescriptive Decision Review (`/decisions`).
+- **Notification Boundary**: Phase 6.8 establishes the in-app intelligence alert center; external delivery channels (Email/SMS/WhatsApp/Webhooks) are designed as future extension points with zero side effects.
+- **API Endpoints**:
+  - `POST /api/monitoring/run`: Trigger proactive monitoring scan.
+  - `GET /api/monitoring/alerts`: Filterable, paginated alert list.
+  - `GET /api/monitoring/alerts/{id}`: Detailed alert context with workflow linkages.
+  - `POST /api/monitoring/alerts/{id}/acknowledge`: Mark alert acknowledged.
+  - `POST /api/monitoring/alerts/{id}/resolve`: Mark alert resolved.
+  - `POST /api/monitoring/alerts/{id}/dismiss`: Mark alert dismissed.
+  - `GET /api/monitoring/summary`: Executive monitoring KPI telemetry.
+  - `GET /api/monitoring/runs`: Observability history of monitoring runs.
+
 ---
 
 # Development Roadmap
@@ -1628,6 +1696,7 @@ DETECT → INVESTIGATE → EXPLAIN → AI REASONING → RECOMMEND → SIMULATE �
 [x] Prescriptive Action Recommendations (Phase 6.5)
 [x] What-If Scenario Simulation (Phase 6.6)
 [x] Human Approval & Decision Governance (Phase 6.7)
+[x] Proactive Intelligence & Monitoring (Phase 6.8)
 [ ] Production database
 [ ] Dockerization
 [ ] CI/CD

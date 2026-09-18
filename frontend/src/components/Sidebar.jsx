@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, TrendingUp, ShieldAlert, Sliders, ShieldCheck, LogOut, X, Sparkles } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, TrendingUp, ShieldAlert, Sliders, ShieldCheck, Activity, LogOut, X, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { path: '/anomalies', name: 'Anomaly Insights', icon: ShieldAlert },
   { path: '/simulation', name: 'What-If Simulation', icon: Sliders },
   { path: '/decisions', name: 'Decision Center', icon: ShieldCheck },
+  { path: '/intelligence', name: 'Intelligence Monitor', icon: Activity },
 ];
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {

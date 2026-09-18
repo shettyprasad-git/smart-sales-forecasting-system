@@ -13,6 +13,7 @@ import Forecast from './pages/Forecast';
 import Anomalies from './pages/Anomalies';
 import Simulation from './pages/Simulation';
 import DecisionCenter from './pages/DecisionCenter';
+import IntelligenceMonitor from './pages/IntelligenceMonitor';
 import NotFound from './pages/NotFound';
 
 // Root redirect handler
@@ -43,6 +44,7 @@ const AppContent = () => {
           <Route path="/simulation" element={<Simulation />} />
           <Route path="/decisions" element={<DecisionCenter />} />
           <Route path="/decisions/:id" element={<DecisionCenter />} />
+          <Route path="/intelligence" element={<IntelligenceMonitor />} />
         </Route>
       </Route>
 

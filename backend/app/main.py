@@ -11,6 +11,7 @@ from backend.app.api.decisions import router as decisions_router
 from backend.app.api.explanations import router as explanations_router
 from backend.app.api.forecast import router as forecast_router
 from backend.app.api.investigations import router as investigations_router
+from backend.app.api.monitoring import router as monitoring_router
 from backend.app.api.products import router as products_router
 from backend.app.api.recommendations import router as recommendations_router
 from backend.app.api.sales import router as sales_router
@@ -108,6 +109,7 @@ app.include_router(products_router)
 app.include_router(sales_router)
 app.include_router(simulations_router)
 app.include_router(decisions_router)
+app.include_router(monitoring_router)
 
 
 @app.get("/")

@@ -54,6 +54,18 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    alerts: Mapped[list["MonitoringAlert"]] = relationship(
+        "MonitoringAlert",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    monitoring_runs: Mapped[list["MonitoringRun"]] = relationship(
+        "MonitoringRun",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -352,4 +364,189 @@ class DecisionAuditEvent(Base):
     actor: Mapped["User"] = relationship(
         "User",
     )
+
+
+class MonitoringAlert(Base):
+    __tablename__ = "monitoring_alerts"
+
+    id: Mapped[str] = mapped_column(
+        String(50),
+        primary_key=True,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    anomaly_id: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        index=True,
+    )
+
+    alert_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    metric: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    severity: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        index=True,
+    )
+
+    priority: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="new",
+        nullable=False,
+        index=True,
+    )
+
+    event_date: Mapped[datetime] = mapped_column(
+        Date,
+        nullable=False,
+        index=True,
+    )
+
+    actual_value: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    expected_value: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    deviation: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    deviation_percent: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    fingerprint: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    evidence_snapshot: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="alerts",
+    )
+
+
+class MonitoringRun(Base):
+    __tablename__ = "monitoring_runs"
+
+    id: Mapped[str] = mapped_column(
+        String(50),
+        primary_key=True,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    total_records_evaluated: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    anomalies_found: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    alerts_created: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    duplicates_suppressed: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="running",
+        nullable=False,
+        index=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="monitoring_runs",
+    )
+
 
