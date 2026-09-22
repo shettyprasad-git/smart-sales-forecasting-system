@@ -1,0 +1,27 @@
+# Web framework and ASGI server
+fastapi==0.141.1
+uvicorn==0.52.4
+
+# Settings and Data Validation
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+
+# Database ORM and PostgreSQL Driver
+SQLAlchemy==2.0.52
+psycopg2-binary==2.9.13
+
+# Authentication and Security
+PyJWT==2.13.0
+pwdlib[argon2]==0.3.1
+argon2-cffi==25.1.0
+python-multipart==0.0.32
+
+# Machine Learning and Numerical Computing
+numpy==2.5.2
+pandas==3.0.5
+scikit-learn==1.9.0
+joblib==1.6.0
+
+# LLM / AI Reasoning Provider
+google-genai==2.24.0
