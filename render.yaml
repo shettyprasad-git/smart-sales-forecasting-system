@@ -1,23 +1,26 @@
 services:
   # ============================================================================
-  # Smart Sales Forecasting System - Backend API Service
+  # Smart Sales Forecasting System - Backend API Service (Render Free Tier)
+  # Free deployment architecture:
+  # GitHub -> Render Free FastAPI backend -> Supabase PostgreSQL -> Vercel Frontend
   # ============================================================================
   - type: web
     name: smart-sales-backend
-    env: python
-    region: oregon
-    plan: standard
+    runtime: python
+    region: singapore
+    plan: free
     buildCommand: pip install -r backend/requirements.txt
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      # External Supabase PostgreSQL connection string (supplied via Render Dashboard)
       - key: DATABASE_URL
-        fromDatabase:
-          name: sales-forecasting-db
-          property: connectionString
-      # Platform-managed secret provisioning:
+        sync: false
+      # Platform-managed persistent secret provisioning:
       # Render generates a secure 256-bit cryptographic string ONCE at initial service
       # provisioning time and persists it in Render's environment variable store.
       # The persistent value is injected as $SECRET_KEY into the application environment.
@@ -25,43 +28,11 @@ services:
       # that this environment variable is present and >= 16 characters on startup.
       - key: SECRET_KEY
         generateValue: true
+      # Google Gemini API key for grounded narrative intelligence & recommendations
       - key: GEMINI_API_KEY
         sync: false
+      # Vercel frontend URL (e.g. https://your-project.vercel.app)
       - key: ALLOWED_ORIGINS
-        fromService:
-          type: web
-          name: smart-sales-frontend
-          property: host
+        sync: false
       - key: LOG_LEVEL
         value: INFO
-
-  # ============================================================================
-  # Smart Sales Forecasting System - Frontend SPA Static Site
-  # ============================================================================
-  - type: web
-    name: smart-sales-frontend
-    env: static
-    region: oregon
-    plan: standard
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: smart-sales-backend
-          property: host
-
-# ============================================================================
-# Managed PostgreSQL Database
-# ============================================================================
-databases:
-  - name: sales-forecasting-db
-    databaseName: sales_forecasting
-    user: sales_admin
-    region: oregon
-    plan: starter
