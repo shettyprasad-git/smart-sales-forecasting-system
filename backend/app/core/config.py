@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     allowed_origins: str | list[str] = "http://localhost:5173,http://127.0.0.1:5173"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.8-flash"
+    admin_username: str = "admin"
+    admin_email: str = "admin@smart-sales.local"
+    admin_password: str | None = Field(default=None, repr=False)
 
     model_config = SettingsConfigDict(
         env_file=".env",

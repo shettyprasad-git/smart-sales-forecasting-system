@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import settings
 from backend.app.core.rate_limiter import rate_limit_auth
 from backend.app.core.security import (
     create_access_token,
@@ -38,6 +39,13 @@ def register(
     user_data: UserCreate,
     db: Session = Depends(get_db),
 ):
+    # Reserve configured administrator email from public self-registration
+    admin_email = (settings.admin_email or "admin@smart-sales.local").strip().lower()
+    if user_data.email.strip().lower() == admin_email:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
 
     existing_user = get_user_by_email(
         db,
@@ -81,10 +89,18 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    login_identifier = (form_data.username or "").strip()
+
+    # Resolve configured administrator username (e.g. "admin") to the internal administrator email
+    admin_user = (settings.admin_username or "admin").strip().lower()
+    if login_identifier.lower() == admin_user:
+        lookup_email = (settings.admin_email or "admin@smart-sales.local").strip().lower()
+    else:
+        lookup_email = login_identifier.lower()
 
     user = get_user_by_email(
         db,
-        form_data.username,
+        lookup_email,
     )
 
     if user is None or not verify_password(

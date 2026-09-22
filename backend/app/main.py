@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import logging
 import re
 import time
@@ -25,12 +26,32 @@ from backend.app.core.config import settings
 from backend.app.core.exceptions import global_exception_handler
 from backend.app.core.logging_config import configure_logging
 from backend.app.database.database import get_db
+from backend.app.database.init_db import init_database_and_seed
 
 configure_logging()
 
 logger = logging.getLogger(__name__)
 
 CORRELATION_ID_REGEX = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager.
+    Initializes database tables idempotently and seeds the bootstrap administrator
+    account before processing incoming requests.
+    """
+    try:
+        init_database_and_seed()
+    except Exception as exc:
+        logger.warning(
+            "Database initialization encountered an error during startup: %s. "
+            "Continuing application startup; database connectivity will be verified by /ready.",
+            exc,
+        )
+    yield
+
 
 app = FastAPI(
     title="Smart Sales Forecasting API",
@@ -39,6 +60,7 @@ app = FastAPI(
         "Smart Sales Forecasting System."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_exception_handler(

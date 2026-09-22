@@ -1,4 +1,11 @@
-﻿from datetime import datetime
+from datetime import datetime
+import email_validator
+
+# Permit internal `.local` domain names (e.g. admin@smart-sales.local) for enterprise service accounts
+if "local" in getattr(email_validator, "SPECIAL_USE_DOMAIN_NAMES", []):
+    email_validator.SPECIAL_USE_DOMAIN_NAMES = [
+        d for d in email_validator.SPECIAL_USE_DOMAIN_NAMES if d != "local"
+    ]
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
