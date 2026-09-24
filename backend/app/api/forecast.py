@@ -56,13 +56,12 @@ def generate_forecast(
 
     try:
         user_id = current_user.id if current_user else None
-        model_name, forecast_df = (
-            forecast_service.generate_forecast(
-                horizon=request.horizon,
-                user_id=user_id,
-                db=db,
-            )
+        forecast_result = forecast_service.generate_forecast(
+            horizon=request.horizon,
+            user_id=user_id,
+            db=db,
         )
+        model_name, forecast_df = forecast_result[0], forecast_result[1]
 
         forecast = [
             ForecastPoint(
@@ -77,6 +76,12 @@ def generate_forecast(
         return ForecastResponse(
             horizon=request.horizon,
             model=model_name,
+            source=getattr(forecast_result, "source", "global"),
+            model_type=getattr(forecast_result, "model_type", None),
+            model_version=getattr(forecast_result, "model_version", None),
+            validation_wape=getattr(forecast_result, "validation_wape", None),
+            test_wape=getattr(forecast_result, "test_wape", None),
+            fallback_reason=getattr(forecast_result, "fallback_reason", None),
             forecast=forecast,
         )
 

@@ -16,6 +16,7 @@ import {
   Calendar,
   Layers,
   Package,
+  Cpu,
 } from 'lucide-react';
 import {
   getCurrentDatasetApi,
@@ -24,6 +25,7 @@ import {
   activateDatasetApi,
   deleteDatasetApi,
 } from '../api/datasets';
+import { getCurrentModelsApi, trainDatasetModelsApi } from '../api/models';
 import { extractErrorMessage } from '../api/axios';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -43,6 +45,8 @@ const Datasets = () => {
 
   const [currentDataset, setCurrentDataset] = useState(null);
   const [history, setHistory] = useState([]);
+  const [modelsData, setModelsData] = useState(null);
+  const [retrainLoading, setRetrainLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -61,15 +65,15 @@ const Datasets = () => {
     try {
       setLoading(true);
       setError(null);
-      const [currentRes, historyRes] = await Promise.allSettled([
+      const [currentRes, historyRes, modelsRes] = await Promise.allSettled([
         getCurrentDatasetApi(),
         getDatasetHistoryApi(),
+        getCurrentModelsApi(),
       ]);
 
       if (currentRes.status === 'fulfilled') {
         setCurrentDataset(currentRes.value);
       } else {
-        // May return 404 if no active dataset
         setCurrentDataset(null);
       }
 
@@ -77,6 +81,12 @@ const Datasets = () => {
         setHistory(historyRes.value?.datasets || historyRes.value?.items || []);
       } else {
         setHistory([]);
+      }
+
+      if (modelsRes.status === 'fulfilled') {
+        setModelsData(modelsRes.value);
+      } else {
+        setModelsData(null);
       }
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -88,6 +98,49 @@ const Datasets = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Auto-poll models data if any training job is active
+  useEffect(() => {
+    const isJobActive =
+      modelsData?.training_job &&
+      ['queued', 'processing', 'training', 'evaluating'].includes(modelsData.training_job.status);
+    const areModelsActive =
+      modelsData?.models &&
+      modelsData.models.some((m) =>
+        ['queued', 'processing', 'training', 'evaluating'].includes(m.status)
+      );
+
+    if (!isJobActive && !areModelsActive) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const updated = await getCurrentModelsApi();
+        setModelsData(updated);
+      } catch (e) {
+        // silent polling catch
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [modelsData]);
+
+  const handleRetrain = async () => {
+    const targetId = currentDataset?.dataset_id || currentDataset?.id;
+    if (!targetId) return;
+
+    try {
+      setRetrainLoading(true);
+      setError(null);
+      await trainDatasetModelsApi(targetId);
+      setSuccessMessage('Model benchmarking and training queued for active dataset.');
+      const updated = await getCurrentModelsApi();
+      setModelsData(updated);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setRetrainLoading(false);
+    }
+  };
 
   // Handle Drag & Drop
   const handleDragOver = (e) => {
@@ -340,12 +393,200 @@ const Datasets = () => {
           <div className="flex items-center space-x-2.5">
             <ShieldCheck className="w-4 h-4 text-indigo-400 flex-shrink-0" />
             <span>
-              <strong className="text-indigo-200">Model Runtime Inference Mode:</strong> Uploaded datasets are used for runtime inference using the existing pre-trained 7/30/90-day models without retraining.
+              <strong className="text-indigo-200">Model Runtime Inference Mode:</strong> Custom company-specific models are benchmarked per horizon and served dynamically, with automatic fallback to global pre-trained models.
             </span>
           </div>
           <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap ml-2">
-            Pre-Trained Inference
+            Dynamic Tenant Inference
           </span>
+        </div>
+      </div>
+
+      {/* Company Forecasting Models Panel */}
+      <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+              <Cpu className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-base font-bold text-slate-100">Company Forecasting Models</h2>
+                {modelsData?.active_model_version && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                    Version {modelsData.active_model_version}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Automated one-time benchmarking and selection per horizon (7D, 30D, 90D) evaluated on Validation WAPE.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleRetrain}
+              disabled={
+                retrainLoading ||
+                !currentDataset ||
+                Boolean(
+                  modelsData?.training_job &&
+                    ['queued', 'processing', 'training', 'evaluating'].includes(
+                      modelsData.training_job.status
+                    )
+                )
+              }
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg shadow-indigo-600/20 transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${
+                  retrainLoading ||
+                  (modelsData?.training_job &&
+                    ['queued', 'processing', 'training', 'evaluating'].includes(
+                      modelsData.training_job.status
+                    ))
+                    ? 'animate-spin'
+                    : ''
+                }`}
+              />
+              <span>{retrainLoading ? 'Triggering...' : 'Retrain Models'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Training In Progress Banner */}
+        {modelsData?.training_job &&
+          ['queued', 'processing', 'training', 'evaluating'].includes(
+            modelsData.training_job.status
+          ) && (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <div className="flex items-center space-x-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                  <span>
+                    Training Job in Progress:{' '}
+                    {modelsData.training_job.progress_stage ||
+                      'Benchmarking candidate models...'}
+                  </span>
+                </div>
+                <span className="uppercase text-[10px] tracking-wider px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
+                  {modelsData.training_job.status}
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-amber-400 h-1.5 rounded-full animate-pulse w-3/4"></div>
+              </div>
+            </div>
+          )}
+
+        {/* 3 Horizon Model Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {(
+            modelsData?.models || [
+              { horizon: 7, status: 'none' },
+              { horizon: 30, status: 'none' },
+              { horizon: 90, status: 'none' },
+            ]
+          ).map((m) => {
+            const isReady = m.status === 'ready';
+            const isTraining = ['queued', 'processing', 'training', 'evaluating'].includes(
+              m.status
+            );
+            const isInsufficient = m.status === 'insufficient_data';
+            const isFailed = m.status === 'failed';
+
+            return (
+              <div
+                key={m.horizon}
+                className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                  isReady
+                    ? 'bg-slate-950/70 border-emerald-500/30'
+                    : isInsufficient
+                    ? 'bg-slate-950/60 border-indigo-500/20'
+                    : isTraining
+                    ? 'bg-slate-950/60 border-amber-500/30'
+                    : 'bg-slate-950/40 border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">
+                    {m.horizon}-Day Forecast Model
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      isReady
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : isTraining
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        : isInsufficient
+                        ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                        : isFailed
+                        ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {isReady
+                      ? 'Ready'
+                      : isTraining
+                      ? 'Training...'
+                      : isInsufficient
+                      ? 'Insufficient History'
+                      : isFailed
+                      ? 'Failed'
+                      : 'Not Trained'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-medium text-slate-400 block">
+                    Selected model for this dataset
+                  </span>
+                  <span className="text-sm font-bold text-slate-100 mt-0.5 block truncate">
+                    {isReady
+                      ? m.model_type
+                      : isInsufficient
+                      ? 'Global Pretrained Fallback'
+                      : 'Global Fallback'}
+                  </span>
+                </div>
+
+                {isReady ? (
+                  <div className="space-y-2 pt-1 border-t border-slate-800/80">
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                        <span className="text-slate-400 block">Val WAPE</span>
+                        <span className="font-bold text-emerald-400 mt-0.5 block">
+                          {m.validation_wape != null
+                            ? `${(m.validation_wape * 100).toFixed(1)}%`
+                            : '—'}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                        <span className="text-slate-400 block">Test WAPE</span>
+                        <span className="font-bold text-slate-200 mt-0.5 block">
+                          {m.test_wape != null
+                            ? `${(m.test_wape * 100).toFixed(1)}%`
+                            : '—'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-400 flex items-center justify-between px-1">
+                      <span>Trained rows: {m.training_rows || '—'}</span>
+                      <span>{m.trained_at ? formatDate(m.trained_at) : ''}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400">
+                    {m.status_message ||
+                      (isTraining
+                        ? 'Evaluating candidate algorithms...'
+                        : 'Runtime queries use global pre-trained models.')}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

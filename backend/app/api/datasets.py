@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -24,6 +25,12 @@ from backend.app.schemas.datasets import (
     DatasetHistoryItem,
     DatasetHistoryResponse,
     DatasetSummaryResponse,
+)
+from backend.app.schemas.models import TrainTriggerResponse
+from backend.app.services.company_model_service import (
+    TrainingConcurrencyError,
+    company_model_service,
+    training_lock_manager,
 )
 from backend.app.services.dataset_runtime_service import (
     DatasetConflictError,
@@ -47,13 +54,14 @@ router = APIRouter(
 )
 async def upload_dataset(
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DatasetSummaryResponse:
     """
     Accepts an uploaded CSV file, validates columns and data rows deterministically,
-    stores normalized sales records in PostgreSQL, and activates the dataset for the current user.
-    Uploaded datasets are used for runtime inference using the existing pre-trained 7/30/90-day models without retraining.
+    stores normalized sales records in PostgreSQL, activates the dataset for the current user,
+    and enqueues asynchronous company model benchmarking and training.
     """
     if not file.filename:
         raise HTTPException(
@@ -101,6 +109,23 @@ async def upload_dataset(
             original_filename=file.filename,
             file_content=file_content,
         )
+
+        # Enqueue background company model training
+        try:
+            job, _ = company_model_service.enqueue_training_job(
+                db=db,
+                user_id=current_user.id,
+                dataset_id=summary.dataset_id,
+            )
+            background_tasks.add_task(
+                company_model_service.execute_training_pipeline,
+                user_id=current_user.id,
+                dataset_id=summary.dataset_id,
+                job_id=job.id,
+            )
+        except Exception as exc:
+            logger.warning("Could not auto-enqueue model training on upload: %s", exc)
+
         return summary
     except DatasetValidationError as exc:
         db.rollback()
@@ -211,11 +236,22 @@ def activate_dataset_endpoint(
     Archives previously active datasets.
     """
     try:
-        return dataset_runtime_service.activate_dataset(
+        summary = dataset_runtime_service.activate_dataset(
             db=db,
             user_id=current_user.id,
             dataset_id=dataset_id,
         )
+        # Synchronize active company model pointers for this user
+        try:
+            company_model_service.activate_dataset_models(
+                db=db,
+                user_id=current_user.id,
+                dataset_id=dataset_id,
+            )
+        except Exception as exc:
+            logger.warning("Could not sync active model pointers on dataset activation: %s", exc)
+
+        return summary
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -231,6 +267,73 @@ def activate_dataset_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/{dataset_id}/train",
+    response_model=TrainTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger asynchronous company model training and benchmarking for a dataset",
+)
+def train_dataset_models_endpoint(
+    dataset_id: str = FastPath(..., description="Unique dataset identifier"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TrainTriggerResponse:
+    """
+    Manually trigger company forecasting model benchmarking across 7D, 30D, and 90D horizons.
+    Quarantines test data from model selection and persists winning architectures to persistent storage.
+    """
+    # Verify dataset belongs to current user
+    ds = db.scalars(
+        select(DatasetUpload).where(
+            DatasetUpload.id == dataset_id,
+            DatasetUpload.user_id == current_user.id,
+        )
+    ).first()
+    if not ds:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset '{dataset_id}' not found for current user.",
+        )
+
+    if training_lock_manager.is_locked(current_user.id, dataset_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Model training is already in progress for this dataset.",
+        )
+
+    try:
+        job, acquired = company_model_service.enqueue_training_job(
+            db=db,
+            user_id=current_user.id,
+            dataset_id=dataset_id,
+        )
+        if not acquired:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Model training is already in progress for this dataset.",
+            )
+    except TrainingConcurrencyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    background_tasks.add_task(
+        company_model_service.execute_training_pipeline,
+        user_id=current_user.id,
+        dataset_id=dataset_id,
+        job_id=job.id,
+    )
+
+    return TrainTriggerResponse(
+        dataset_id=dataset_id,
+        job_id=job.id,
+        status=job.status,
+        message="Company model benchmarking and training queued for horizons [7, 30, 90].",
+    )
 
 
 @router.delete(

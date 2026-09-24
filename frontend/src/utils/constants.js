@@ -12,7 +12,12 @@ export const FORECAST_HORIZONS = [
 ];
 
 export const MODEL_DESCRIPTIONS = {
-  'Random Forest': 'Short-term non-linear pattern & holiday spike detection model.',
+  // Company-trained candidate models
+  'Seasonal Naive': 'Seasonal 7-day cyclical baseline forecasting model.',
+  'HistGradientBoosting': 'High-performance histogram-based gradient boosted tree ensemble.',
+  'Random Forest': 'Multi-tree bagged ensemble capturing non-linear relationships and interactions.',
+  'Ridge Regression': 'L2-regularized linear model tracking macro trends and baseline stability.',
+  // Global pre-trained fallback models
   'Gradient Boosting': 'Medium-term boosted ensemble trend forecasting model.',
   'Linear Regression': 'Long-term baseline macro trend forecasting model.',
 };

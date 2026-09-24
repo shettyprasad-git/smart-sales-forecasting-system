@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,12 @@ class ForecastPoint(BaseModel):
 class ForecastResponse(BaseModel):
     horizon: int
     model: str
+    source: str = "global"
+    model_type: str | None = None
+    model_version: int | None = None
+    validation_wape: float | None = None
+    test_wape: float | None = None
+    fallback_reason: str | None = None
     forecast: list[ForecastPoint]
 
 

@@ -145,6 +145,8 @@ def test_production_secret_validation_enforced():
         secret_key="production-secure-random-key-123456",
         database_url="postgresql://user:pass@host:5432/sales",
         allowed_origins="https://app.onrender.com,https://dashboard.company.com",
+        supabase_url="https://test.supabase.co",
+        supabase_service_role_key="test-supabase-service-role-key",
     )
     assert valid_settings.environment == "production"
     assert valid_settings.cors_allowed_origins == [

@@ -144,13 +144,28 @@ const Forecast = () => {
                 <Cpu className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     Assigned Model:
                   </span>
                   <span className="px-2.5 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold font-mono">
                     {modelName}
                   </span>
+                  {forecastResponse?.source === 'company' && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      Company-Trained {forecastResponse.model_version ? `v${forecastResponse.model_version}` : ''}
+                    </span>
+                  )}
+                  {forecastResponse?.source === 'global_fallback' && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30" title={forecastResponse.fallback_reason || ''}>
+                      Global Fallback
+                    </span>
+                  )}
+                  {forecastResponse?.validation_wape != null && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      Val WAPE: {(forecastResponse.validation_wape * 100).toFixed(1)}%
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-base font-bold text-slate-100">
                   {horizon}-Day Demand Prediction
@@ -159,6 +174,11 @@ const Forecast = () => {
                   {MODEL_DESCRIPTIONS[modelName] ||
                     'Production Machine Learning forecasting model trained on sales historical telemetry.'}
                 </p>
+                {forecastResponse?.fallback_reason && (
+                  <p className="text-[11px] text-amber-300/80 pt-0.5">
+                    ℹ️ Note: {forecastResponse.fallback_reason}
+                  </p>
+                )}
               </div>
             </div>
 

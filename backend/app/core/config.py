@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     admin_email: str = "admin@smart-sales.local"
     admin_password: str | None = Field(default=None, repr=False)
     max_dataset_upload_bytes: int = 50 * 1024 * 1024
+    supabase_url: str | None = None
+    supabase_key: str | None = None
+    supabase_service_role_key: str | None = None
+    supabase_storage_bucket: str = "models"
+    model_storage_local_dir: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -86,6 +91,16 @@ class Settings(BaseSettings):
             if "*" in origins:
                 raise ValueError(
                     "Production configuration error: Wildcard '*' is not permitted in ALLOWED_ORIGINS when credentialed authentication is enabled."
+                )
+
+            # 4. Validate Supabase Object Storage credentials for company model artifacts
+            sb_url = (self.supabase_url or "").strip()
+            sb_service_key = (self.supabase_service_role_key or "").strip()
+            if not sb_url or not sb_service_key:
+                raise ValueError(
+                    "Production configuration error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY "
+                    "must be configured for privileged model artifact storage in production. "
+                    "Public/anon keys are not permitted for private model artifacts."
                 )
 
         return self

@@ -90,6 +90,30 @@ def ensure_schema_migrations(engine: Engine) -> None:
                     )
                 logger.info("Successfully added raw_product_id column to products.")
 
+    if "model_training_jobs" in table_names:
+        columns = {col["name"] for col in inspector.get_columns("model_training_jobs")}
+        with engine.begin() as conn:
+            if "last_heartbeat_at" not in columns:
+                logger.info("Migrating schema: adding last_heartbeat_at column to model_training_jobs...")
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("ALTER TABLE model_training_jobs ADD COLUMN IF NOT EXISTS last_heartbeat_at TIMESTAMP;"))
+                else:
+                    conn.execute(text("ALTER TABLE model_training_jobs ADD COLUMN last_heartbeat_at TIMESTAMP;"))
+                logger.info("Successfully added last_heartbeat_at column to model_training_jobs.")
+
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_training_job_per_dataset "
+                        "ON model_training_jobs (user_id, dataset_id) "
+                        "WHERE status IN ('queued', 'processing', 'training', 'evaluating');"
+                    )
+                )
+            logger.info("Verified/created partial unique index uq_active_training_job_per_dataset on model_training_jobs.")
+        except Exception as exc:
+            logger.warning("Could not create partial unique index uq_active_training_job_per_dataset: %s", exc)
+
     if "dataset_uploads" in table_names:
         try:
             with engine.begin() as conn:
@@ -103,6 +127,124 @@ def ensure_schema_migrations(engine: Engine) -> None:
         except Exception as exc:
             logger.warning("Could not create partial unique index uq_dataset_uploads_user_active: %s", exc)
 
+    if "company_models" in table_names:
+        cm_columns = {col["name"] for col in inspector.get_columns("company_models")}
+        with engine.begin() as conn:
+            if "feature_columns" not in cm_columns:
+                logger.info("Migrating schema: adding feature_columns column to company_models...")
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("ALTER TABLE company_models ADD COLUMN IF NOT EXISTS feature_columns JSON;"))
+                else:
+                    conn.execute(text("ALTER TABLE company_models ADD COLUMN feature_columns JSON;"))
+                logger.info("Successfully added feature_columns column to company_models.")
+            if "target_column" not in cm_columns:
+                logger.info("Migrating schema: adding target_column column to company_models...")
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("ALTER TABLE company_models ADD COLUMN IF NOT EXISTS target_column VARCHAR(50) DEFAULT 'Quantity';"))
+                else:
+                    conn.execute(text("ALTER TABLE company_models ADD COLUMN target_column VARCHAR(50) DEFAULT 'Quantity';"))
+                logger.info("Successfully added target_column column to company_models.")
+            if "reference_start_date" not in cm_columns:
+                logger.info("Migrating schema: adding reference_start_date column to company_models...")
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("ALTER TABLE company_models ADD COLUMN IF NOT EXISTS reference_start_date VARCHAR(20);"))
+                else:
+                    conn.execute(text("ALTER TABLE company_models ADD COLUMN reference_start_date VARCHAR(20);"))
+                logger.info("Successfully added reference_start_date column to company_models.")
+
+        try:
+            with engine.begin() as conn:
+                if engine.dialect.name == "sqlite":
+                    conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS uq_company_models_user_horizon_active "
+                            "ON company_models (user_id, horizon) WHERE is_active = 1;"
+                        )
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS uq_company_models_user_horizon_active "
+                            "ON company_models (user_id, horizon) WHERE is_active = true;"
+                        )
+                    )
+            logger.info("Verified/created partial unique index uq_company_models_user_horizon_active on company_models.")
+        except Exception as exc:
+            logger.warning("Could not create partial unique index uq_company_models_user_horizon_active: %s", exc)
+
+
+def recover_interrupted_training_jobs(engine: Engine, stale_minutes: int = 10) -> None:
+    """
+    Recovers from Render container restarts by transitioning stale in-flight training jobs to 'failed'.
+    Uses heartbeat-based stale detection: a job running for > 10m is NOT failed if its
+    heartbeat was recently updated. Only jobs whose last_heartbeat_at is older than stale_minutes
+    (or missing) are considered stale.
+    """
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "model_training_jobs" not in inspector.get_table_names():
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
+    cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        with engine.begin() as conn:
+            if engine.dialect.name == "sqlite":
+                conn.execute(
+                    text(
+                        "UPDATE model_training_jobs "
+                        "SET status = 'failed', "
+                        "error_message = 'Training job became unresponsive (heartbeat timeout). Please click Retrain Models.' "
+                        "WHERE status IN ('queued', 'processing', 'training', 'evaluating') "
+                        "AND ("
+                        "  (last_heartbeat_at IS NOT NULL AND datetime(last_heartbeat_at) < datetime(:cutoff)) "
+                        "  OR (last_heartbeat_at IS NULL AND started_at IS NOT NULL AND datetime(started_at) < datetime(:cutoff)) "
+                        "  OR (last_heartbeat_at IS NULL AND started_at IS NULL AND datetime(created_at) < datetime(:cutoff))"
+                        ");"
+                    ),
+                    {"cutoff": cutoff_str},
+                )
+                conn.execute(
+                    text(
+                        "UPDATE company_models "
+                        "SET status = 'failed', "
+                        "status_message = 'Training job became unresponsive (heartbeat timeout). Please click Retrain Models.' "
+                        "WHERE status IN ('queued', 'processing', 'training', 'evaluating') "
+                        "AND datetime(created_at) < datetime(:cutoff);"
+                    ),
+                    {"cutoff": cutoff_str},
+                )
+            else:
+                conn.execute(
+                    text(
+                        "UPDATE model_training_jobs "
+                        "SET status = 'failed', "
+                        "error_message = 'Training job became unresponsive (heartbeat timeout). Please click Retrain Models.' "
+                        "WHERE status IN ('queued', 'processing', 'training', 'evaluating') "
+                        "AND ("
+                        "  (last_heartbeat_at IS NOT NULL AND last_heartbeat_at < :cutoff) "
+                        "  OR (last_heartbeat_at IS NULL AND started_at IS NOT NULL AND started_at < :cutoff) "
+                        "  OR (last_heartbeat_at IS NULL AND started_at IS NULL AND created_at < :cutoff)"
+                        ");"
+                    ),
+                    {"cutoff": cutoff},
+                )
+                conn.execute(
+                    text(
+                        "UPDATE company_models "
+                        "SET status = 'failed', "
+                        "status_message = 'Training job became unresponsive (heartbeat timeout). Please click Retrain Models.' "
+                        "WHERE status IN ('queued', 'processing', 'training', 'evaluating') "
+                        "AND created_at < :cutoff;"
+                    ),
+                    {"cutoff": cutoff},
+                )
+    except Exception as exc:
+        logger.warning("Could not check/recover interrupted training jobs: %s", exc)
+
 
 def init_db(engine: Engine | None = None) -> None:
     """
@@ -113,6 +255,14 @@ def init_db(engine: Engine | None = None) -> None:
     logger.info("Verifying/initializing database schema for dialect: %s", target_engine.dialect.name)
     Base.metadata.create_all(bind=target_engine)
     ensure_schema_migrations(target_engine)
+    recover_interrupted_training_jobs(target_engine)
+    try:
+        from backend.app.services.company_model_service import company_model_service
+        resumed = company_model_service.resume_stranded_queued_jobs(engine=target_engine)
+        if resumed > 0:
+            logger.info("Resumed %d stranded queued training job(s) on startup.", resumed)
+    except Exception as exc:
+        logger.warning("Could not check/resume stranded training jobs on startup: %s", exc)
     logger.info("Database schema verification/initialization complete.")
 
 
