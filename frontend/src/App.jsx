@@ -15,6 +15,7 @@ const Anomalies = lazy(() => import('./pages/Anomalies'));
 const Simulation = lazy(() => import('./pages/Simulation'));
 const DecisionCenter = lazy(() => import('./pages/DecisionCenter'));
 const IntelligenceMonitor = lazy(() => import('./pages/IntelligenceMonitor'));
+const Datasets = lazy(() => import('./pages/Datasets'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Root redirect handler
@@ -45,6 +46,7 @@ const AppContent = () => {
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/datasets" element={<Datasets />} />
             <Route path="/products" element={<Products />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/forecast" element={<Forecast />} />

@@ -48,68 +48,74 @@ def score_to_severity(abs_score: float) -> SeverityLevel | None:
     return None
 
 
+from backend.app.services.dataset_runtime_service import (
+    dataset_runtime_service,
+)
+
+
 class AnomalyDetectionService:
     """
     Production service for detecting sales and demand anomalies
     using causal rolling baselines and robust statistics (Median + MAD).
+    Integrates with DatasetRuntimeService for user-isolated multi-tenant data.
     """
 
     def __init__(self) -> None:
-        self._daily_cache: pd.DataFrame | None = None
-        self._category_cache: pd.DataFrame | None = None
-        self._product_meta_cache: dict[str, str] | None = None
+        self._daily_cache: dict[tuple, pd.DataFrame] = {}
+        self._category_cache: dict[tuple, pd.DataFrame] = {}
 
-    def _load_daily_data(self) -> pd.DataFrame:
-        """Load and cache the daily aggregated sales dataset."""
-        if self._daily_cache is None:
-            if not DAILY_DATASET_PATH.exists():
-                raise FileNotFoundError(
-                    f"Daily sales dataset not found: {DAILY_DATASET_PATH}"
-                )
-            logger.info("Loading daily forecasting dataset for anomaly detection...")
-            df = pd.read_csv(DAILY_DATASET_PATH, parse_dates=["Date"])
-            df = df.sort_values("Date").reset_index(drop=True)
-            self._daily_cache = df
-        return self._daily_cache.copy()
+    def clear_cache(self, user_id: int | None = None) -> None:
+        """Invalidate caches for a specific user, or all users if user_id is None."""
+        if user_id is None:
+            self._daily_cache.clear()
+            self._category_cache.clear()
+        else:
+            self._daily_cache = {k: v for k, v in self._daily_cache.items() if k[0] != user_id}
+            self._category_cache = {k: v for k, v in self._category_cache.items() if k[0] != user_id}
 
-    def _load_category_data(self) -> pd.DataFrame:
-        """Load and aggregate category-level daily sales."""
-        if self._category_cache is None:
-            if not PRODUCT_DATASET_PATH.exists():
-                raise FileNotFoundError(
-                    f"Product dataset not found: {PRODUCT_DATASET_PATH}"
+    def _load_daily_data(self, user_id: int | None = None, db: Any = None) -> pd.DataFrame:
+        """Load and cache the daily aggregated sales dataset for user_id."""
+        cache_key = (user_id,)
+        if cache_key not in self._daily_cache:
+            df = dataset_runtime_service.get_daily_aggregate(user_id=user_id, db=db)
+            self._daily_cache[cache_key] = df
+        return self._daily_cache[cache_key].copy()
+
+    def _load_category_data(self, user_id: int | None = None, db: Any = None) -> pd.DataFrame:
+        """Load and aggregate category-level daily sales for user_id."""
+        cache_key = (user_id,)
+        if cache_key not in self._category_cache:
+            df = dataset_runtime_service.get_product_daily(user_id=user_id, db=db)
+            if df.empty:
+                cat_df = pd.DataFrame(
+                    columns=[
+                        "Date",
+                        "Category_ID",
+                        "Category_Name",
+                        "Quantity",
+                        "Sales_Amount",
+                        "Promotion",
+                        "Is_Holiday",
+                    ]
                 )
-            logger.info("Aggregating category daily sales for anomaly detection...")
-            df = pd.read_csv(
-                PRODUCT_DATASET_PATH,
-                usecols=[
-                    "Date",
-                    "Category_ID",
-                    "Category_Name",
-                    "Quantity",
-                    "Sales_Amount",
-                    "Promotion",
-                    "Is_Holiday",
-                ],
-                parse_dates=["Date"],
-            )
-            cat_df = (
-                df.groupby(
-                    ["Date", "Category_ID", "Category_Name"], as_index=False
+            else:
+                cat_df = (
+                    df.groupby(
+                        ["Date", "Category_ID", "Category_Name"], as_index=False
+                    )
+                    .agg(
+                        {
+                            "Quantity": "sum",
+                            "Sales_Amount": "sum",
+                            "Promotion": "max",
+                            "Is_Holiday": "max",
+                        }
+                    )
+                    .sort_values("Date")
+                    .reset_index(drop=True)
                 )
-                .agg(
-                    {
-                        "Quantity": "sum",
-                        "Sales_Amount": "sum",
-                        "Promotion": "max",
-                        "Is_Holiday": "max",
-                    }
-                )
-                .sort_values("Date")
-                .reset_index(drop=True)
-            )
-            self._category_cache = cat_df
-        return self._category_cache.copy()
+            self._category_cache[cache_key] = cat_df
+        return self._category_cache[cache_key].copy()
 
     @staticmethod
     def _compute_series_anomalies(
@@ -253,9 +259,13 @@ class AnomalyDetectionService:
         metrics: list[Literal["quantity", "sales_amount"]] | None = None,
         window: int = 28,
         min_periods: int = 7,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> list[AnomalyItem]:
         """Detect anomalies across the daily aggregate sales dataset."""
-        df = self._load_daily_data()
+        df = self._load_daily_data(user_id=user_id, db=db)
+        if df.empty:
+            return []
         all_metrics = metrics or ["quantity", "sales_amount"]
         results: list[AnomalyItem] = []
 
@@ -289,9 +299,13 @@ class AnomalyDetectionService:
         metrics: list[Literal["quantity", "sales_amount"]] | None = None,
         window: int = 28,
         min_periods: int = 7,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> list[AnomalyItem]:
         """Detect anomalies grouped by product category."""
-        df = self._load_category_data()
+        df = self._load_category_data(user_id=user_id, db=db)
+        if df.empty:
+            return []
         all_metrics = metrics or ["quantity", "sales_amount"]
 
         if category_id:
@@ -328,26 +342,14 @@ class AnomalyDetectionService:
         metrics: list[Literal["quantity", "sales_amount"]] | None = None,
         window: int = 28,
         min_periods: int = 7,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> list[AnomalyItem]:
         """Detect anomalies for a specific product ID."""
-        if not PRODUCT_DATASET_PATH.exists():
-            raise FileNotFoundError(
-                f"Product dataset not found: {PRODUCT_DATASET_PATH}"
-            )
+        df = dataset_runtime_service.get_product_daily(user_id=user_id, db=db)
+        if df.empty:
+            return []
 
-        df = pd.read_csv(
-            PRODUCT_DATASET_PATH,
-            usecols=[
-                "Date",
-                "Product_ID",
-                "Product_Name",
-                "Quantity",
-                "Sales_Amount",
-                "Promotion",
-                "Is_Holiday",
-            ],
-            parse_dates=["Date"],
-        )
         df_prod = df[df["Product_ID"].astype(str) == str(product_id)].sort_values("Date")
 
         if df_prod.empty:
@@ -389,6 +391,8 @@ class AnomalyDetectionService:
         skip: int = 0,
         limit: int = 100,
         window: int = 28,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> AnomalyListResponse:
         """
         Query detected anomalies with comprehensive filtering and summary KPIs.
@@ -399,21 +403,27 @@ class AnomalyDetectionService:
                 category_id=entity_id,
                 metrics=[metric] if metric in ("quantity", "sales_amount") else None,
                 window=window,
+                user_id=user_id,
+                db=db,
             )
-            eval_count = len(self._load_category_data())
+            eval_count = len(self._load_category_data(user_id=user_id, db=db))
         elif entity_type == "product" and entity_id:
             anomalies = self.detect_product_anomalies(
                 product_id=entity_id,
                 metrics=[metric] if metric in ("quantity", "sales_amount") else None,
                 window=window,
+                user_id=user_id,
+                db=db,
             )
             eval_count = len(anomalies)  # approximate for single product
         else:
             anomalies = self.detect_aggregate_anomalies(
                 metrics=[metric] if metric in ("quantity", "sales_amount") else None,
                 window=window,
+                user_id=user_id,
+                db=db,
             )
-            eval_count = len(self._load_daily_data()) * (
+            eval_count = len(self._load_daily_data(user_id=user_id, db=db)) * (
                 1 if metric in ("quantity", "sales_amount") else 2
             )
 

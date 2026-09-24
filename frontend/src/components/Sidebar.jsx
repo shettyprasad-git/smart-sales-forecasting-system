@@ -1,10 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, TrendingUp, ShieldAlert, Sliders, ShieldCheck, Activity, LogOut, X, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Database, ShoppingCart, Package, TrendingUp, ShieldAlert, Sliders, ShieldCheck, Activity, LogOut, X, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
+  { path: '/datasets', name: 'Datasets', icon: Database },
   { path: '/sales', name: 'Sales Records', icon: ShoppingCart },
   { path: '/products', name: 'Products Catalog', icon: Package },
   { path: '/forecast', name: 'Demand Forecast', icon: TrendingUp },

@@ -59,7 +59,14 @@ class MonitoringService:
                 investigation_service=self.investigation_service
             )
         )
-        self._cached_category_anomalies: list[AnomalyItem] | None = None
+        self._cached_category_anomalies: dict[int | None, list[AnomalyItem]] = {}
+
+    def clear_cache(self, user_id: int | None = None) -> None:
+        """Clear cached category anomalies for a specific user, or all users."""
+        if user_id is None:
+            self._cached_category_anomalies.clear()
+        else:
+            self._cached_category_anomalies.pop(user_id, None)
 
     def _determine_priority(self, severity: str) -> str:
         """Map statistical severity to operational priority deterministically."""
@@ -111,7 +118,7 @@ class MonitoringService:
 
         try:
             # 1. Determine date range for scan
-            daily_df = self.anomaly_service._load_daily_data()
+            daily_df = self.anomaly_service._load_daily_data(user_id=user_id, db=db)
             if daily_df.empty:
                 max_date = dt.date.today()
             else:
@@ -128,6 +135,8 @@ class MonitoringService:
                 end_date=max_date,
                 entity_type="aggregate",
                 limit=500,
+                user_id=user_id,
+                db=db,
             )
             anomalies.extend(agg_resp.items)
             eval_records = len(daily_df[daily_df["Date"].dt.date >= start_date]) * 2
@@ -135,11 +144,16 @@ class MonitoringService:
             # Category anomalies
             if request.include_categories:
                 try:
-                    if self._cached_category_anomalies is None:
-                        self._cached_category_anomalies = self.anomaly_service.detect_category_anomalies()
+                    if user_id not in self._cached_category_anomalies:
+                        self._cached_category_anomalies[user_id] = (
+                            self.anomaly_service.detect_category_anomalies(
+                                user_id=user_id,
+                                db=db,
+                            )
+                        )
                     cat_filtered = [
                         a
-                        for a in self._cached_category_anomalies
+                        for a in self._cached_category_anomalies[user_id]
                         if start_date <= a.date <= max_date
                     ]
                     anomalies.extend(cat_filtered)

@@ -1,7 +1,12 @@
 import logging
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from sqlalchemy.orm import Session
 
+from backend.app.database.database import get_db
+from backend.app.database.models import User
+from backend.app.dependencies import get_current_user_optional
 from backend.app.schemas.investigations import InvestigationResponse
+from backend.app.services.dataset_runtime_service import NoActiveDatasetError
 from backend.app.services.investigation_service import InvestigationService
 
 logger = logging.getLogger(__name__)
@@ -42,14 +47,24 @@ def get_anomaly_investigation(
         default=True,
         description="Whether to include category-level contributors",
     ),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     try:
+        user_id = current_user.id if current_user else None
         return investigation_service.investigate_anomaly(
             anomaly_id=anomaly_id,
             top_n=top_n,
             include_products=include_products,
             include_categories=include_categories,
+            user_id=user_id,
+            db=db,
         )
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

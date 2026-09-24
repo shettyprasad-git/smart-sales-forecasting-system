@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 
 const pageTitles = {
   '/dashboard': 'Executive Sales Dashboard',
+  '/datasets': 'Dataset Management & Runtime Pipeline',
   '/sales': 'Sales Management',
   '/products': 'Products Catalog',
   '/forecast': 'Demand Forecast Engine',

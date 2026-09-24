@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from backend.app.api.ai_reasoning import router as ai_reasoning_router
 from backend.app.api.anomalies import router as anomalies_router
 from backend.app.api.auth import router as auth_router
+from backend.app.api.datasets import router as datasets_router
 from backend.app.api.decisions import router as decisions_router
 from backend.app.api.explanations import router as explanations_router
 from backend.app.api.forecast import router as forecast_router
@@ -145,6 +146,7 @@ app.include_router(auth_router)
 app.include_router(forecast_router)
 app.include_router(products_router)
 app.include_router(sales_router)
+app.include_router(datasets_router)
 app.include_router(simulations_router)
 app.include_router(decisions_router)
 app.include_router(monitoring_router)

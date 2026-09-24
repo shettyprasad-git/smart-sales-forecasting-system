@@ -146,7 +146,12 @@ class SimulationService:
         """Retrieve a cached simulation result by ID."""
         return self._cache.get(simulation_id)
 
-    def _get_baseline_realized_price(self, anomaly_id: str | None = None) -> float:
+    def _get_baseline_realized_price(
+        self,
+        anomaly_id: str | None = None,
+        user_id: int | None = None,
+        db: Any = None,
+    ) -> float:
         """
         Derives baseline realized unit price (₹/unit).
         If anchored to an anomaly with price driver metrics, uses that reference;
@@ -154,7 +159,9 @@ class SimulationService:
         """
         if anomaly_id:
             try:
-                investigation = self.investigation_service.investigate_anomaly(anomaly_id)
+                investigation = self.investigation_service.investigate_anomaly(
+                    anomaly_id, user_id=user_id, db=db
+                )
                 for driver in investigation.drivers:
                     if driver.driver_type == "price" and driver.reference_value and driver.reference_value > 0:
                         return round(float(driver.reference_value), 2)
@@ -163,8 +170,11 @@ class SimulationService:
 
         # Fallback to historical 28-day dataset realized price
         try:
-            if DATASET_PATH.exists():
-                df = pd.read_csv(DATASET_PATH, usecols=["Sales_Amount", "Quantity"])
+            from backend.app.services.dataset_runtime_service import (
+                dataset_runtime_service,
+            )
+            df = dataset_runtime_service.get_daily_aggregate(user_id=user_id, db=db)
+            if not df.empty and "Sales_Amount" in df.columns and "Quantity" in df.columns:
                 recent_sales = df["Sales_Amount"].tail(28).sum()
                 recent_qty = df["Quantity"].tail(28).sum()
                 if recent_qty > 0:
@@ -209,7 +219,12 @@ class SimulationService:
 
         return " ".join(explanation_parts)
 
-    def run_simulation(self, request: SimulationRequest) -> SimulationResponse:
+    def run_simulation(
+        self,
+        request: SimulationRequest,
+        user_id: int | None = None,
+        db: Any = None,
+    ) -> SimulationResponse:
         """
         Execute what-if simulation based on request specifications.
         """
@@ -267,7 +282,9 @@ class SimulationService:
         anomaly_context: AnomalyContext | None = None
         if request.anomaly_id:
             try:
-                inv = self.investigation_service.investigate_anomaly(request.anomaly_id)
+                inv = self.investigation_service.investigate_anomaly(
+                    request.anomaly_id, user_id=user_id, db=db
+                )
                 key_contribs = [
                     f"{d.driver_name}: {d.difference_percent:+.1f}% shift ({d.driver_type})"
                     if d.difference_percent is not None
@@ -290,7 +307,9 @@ class SimulationService:
 
         # 3. Generate Baseline Forecast
         try:
-            _, baseline_df = self.forecast_service.generate_forecast(horizon=request.horizon_days)
+            _, baseline_df = self.forecast_service.generate_forecast(
+                horizon=request.horizon_days, user_id=user_id, db=db
+            )
         except Exception as exc:
             logger.error("Failed to generate baseline forecast: %s", exc)
             return SimulationResponse(
@@ -306,7 +325,9 @@ class SimulationService:
 
         baseline_quantities = baseline_df["Predicted_Quantity"].astype(float).values
         forecast_dates = pd.to_datetime(baseline_df["Date"]).dt.date.values
-        unit_price = self._get_baseline_realized_price(request.anomaly_id)
+        unit_price = self._get_baseline_realized_price(
+            request.anomaly_id, user_id=user_id, db=db
+        )
 
         assumptions: list[str] = []
         limitations: list[str] = [

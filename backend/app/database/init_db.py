@@ -25,6 +25,85 @@ from backend.app.database.user_crud import create_user, get_user_by_email
 logger = logging.getLogger(__name__)
 
 
+def ensure_schema_migrations(engine: Engine) -> None:
+    """
+    Safely and idempotently verifies that newly added columns exist in existing tables.
+    Never drops or alters existing columns or tables.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+
+    if "sales_records" in table_names:
+        columns = [col["name"] for col in inspector.get_columns("sales_records")]
+        if "dataset_id" not in columns:
+            logger.info("Migrating schema: adding dataset_id column to sales_records...")
+            with engine.begin() as conn:
+                if engine.dialect.name == "postgresql":
+                    conn.execute(
+                        text(
+                            "ALTER TABLE sales_records ADD COLUMN IF NOT EXISTS dataset_id VARCHAR(50) REFERENCES dataset_uploads(id) ON DELETE CASCADE;"
+                        )
+                    )
+                else:
+                    # SQLite or other dialects
+                    conn.execute(
+                        text(
+                            "ALTER TABLE sales_records ADD COLUMN dataset_id VARCHAR(50);"
+                        )
+                    )
+            logger.info("Successfully added dataset_id column to sales_records.")
+
+    if "products" in table_names:
+        columns = [col["name"] for col in inspector.get_columns("products")]
+        with engine.begin() as conn:
+            if "tenant_id" not in columns:
+                logger.info("Migrating schema: adding tenant_id column to products...")
+                if engine.dialect.name == "postgresql":
+                    conn.execute(
+                        text(
+                            "ALTER TABLE products ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"
+                        )
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE products ADD COLUMN tenant_id INTEGER;"
+                        )
+                    )
+                logger.info("Successfully added tenant_id column to products.")
+
+            if "raw_product_id" not in columns:
+                logger.info("Migrating schema: adding raw_product_id column to products...")
+                if engine.dialect.name == "postgresql":
+                    conn.execute(
+                        text(
+                            "ALTER TABLE products ADD COLUMN IF NOT EXISTS raw_product_id VARCHAR(255);"
+                        )
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE products ADD COLUMN raw_product_id VARCHAR(255);"
+                        )
+                    )
+                logger.info("Successfully added raw_product_id column to products.")
+
+    if "dataset_uploads" in table_names:
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_dataset_uploads_user_active "
+                        "ON dataset_uploads (user_id) WHERE status = 'active';"
+                    )
+                )
+            logger.info("Verified/created partial unique index uq_dataset_uploads_user_active on dataset_uploads.")
+        except Exception as exc:
+            logger.warning("Could not create partial unique index uq_dataset_uploads_user_active: %s", exc)
+
+
 def init_db(engine: Engine | None = None) -> None:
     """
     Idempotently creates all tables defined in Base.metadata if they do not exist.
@@ -33,6 +112,7 @@ def init_db(engine: Engine | None = None) -> None:
     target_engine = engine or default_engine
     logger.info("Verifying/initializing database schema for dialect: %s", target_engine.dialect.name)
     Base.metadata.create_all(bind=target_engine)
+    ensure_schema_migrations(target_engine)
     logger.info("Database schema verification/initialization complete.")
 
 

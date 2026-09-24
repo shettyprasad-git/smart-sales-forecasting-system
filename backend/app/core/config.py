@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_email: str = "admin@smart-sales.local"
     admin_password: str | None = Field(default=None, repr=False)
+    max_dataset_upload_bytes: int = 50 * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -50,9 +51,15 @@ DATASET_PATH = (
 )
 
 
+from backend.app.services.dataset_runtime_service import (
+    dataset_runtime_service,
+)
+
+
 class BackendForecastService:
     """
     Backend wrapper around the production ML ForecastService.
+    Loads active user dataset via DatasetRuntimeService with user-isolation.
     """
 
     def __init__(self) -> None:
@@ -90,27 +97,23 @@ class BackendForecastService:
         self,
         horizon: int,
         events: pd.DataFrame | None = None,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> tuple[str, pd.DataFrame]:
 
         service = self._get_service(horizon)
 
-        if not DATASET_PATH.exists():
-            raise FileNotFoundError(
-                f"Processed dataset not found: "
-                f"{DATASET_PATH}"
-            )
-
-        df = pd.read_csv(
-            DATASET_PATH,
-            parse_dates=["Date"],
+        df = dataset_runtime_service.get_daily_aggregate(
+            user_id=user_id,
+            db=db,
         )
 
         if df.empty:
             raise ValueError(
-                "Processed forecasting dataset is empty."
+                "Historical forecasting dataset is empty."
             )
 
-        df = df.sort_values("Date")
+        df = df.sort_values("Date").reset_index(drop=True)
 
         history = pd.Series(
             df["Quantity"].astype(float).values
@@ -118,8 +121,9 @@ class BackendForecastService:
 
         if len(history) < 28:
             raise ValueError(
-                "At least 28 historical observations "
-                "are required for forecasting."
+                f"Insufficient historical data for forecasting: "
+                f"dataset contains {len(history)} daily observations, "
+                f"but at least 28 are required."
             )
 
         last_date = pd.Timestamp(

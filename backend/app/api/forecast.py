@@ -1,5 +1,9 @@
-﻿from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
+from backend.app.database.database import get_db
+from backend.app.database.models import User
+from backend.app.dependencies import get_current_user_optional
 from backend.app.schemas.forecast import (
     DashboardKPIs,
     DashboardResponse,
@@ -9,6 +13,7 @@ from backend.app.schemas.forecast import (
     HistoricalPoint,
     HistoricalResponse,
 )
+from backend.app.services.dataset_runtime_service import NoActiveDatasetError
 from backend.app.services.forecast_service import (
     BackendForecastService,
 )
@@ -33,6 +38,8 @@ history_service = HistoryService()
 )
 def generate_forecast(
     request: ForecastRequest,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     """
     Generate a demand forecast using the production ML model.
@@ -48,9 +55,12 @@ def generate_forecast(
         )
 
     try:
+        user_id = current_user.id if current_user else None
         model_name, forecast_df = (
             forecast_service.generate_forecast(
-                horizon=request.horizon
+                horizon=request.horizon,
+                user_id=user_id,
+                db=db,
             )
         )
 
@@ -69,6 +79,12 @@ def generate_forecast(
             model=model_name,
             forecast=forecast,
         )
+
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
     except FileNotFoundError as exc:
         raise HTTPException(
@@ -100,6 +116,8 @@ def get_forecast_history(
         le=2922,
         description="Number of historical daily records to return.",
     ),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     """
     Return historical demand, sales, and profit data
@@ -107,8 +125,11 @@ def get_forecast_history(
     """
 
     try:
+        user_id = current_user.id if current_user else None
         history_df = history_service.get_history(
-            limit=limit
+            limit=limit,
+            user_id=user_id,
+            db=db,
         )
 
         records = [
@@ -124,6 +145,12 @@ def get_forecast_history(
         return HistoricalResponse(
             records=records
         )
+
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
     except FileNotFoundError as exc:
         raise HTTPException(
@@ -159,6 +186,8 @@ def get_dashboard(
         le=2922,
         description="Number of historical records.",
     ),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     """
     Return dashboard KPIs, historical data, and forecast
@@ -175,8 +204,11 @@ def get_dashboard(
         )
 
     try:
+        user_id = current_user.id if current_user else None
         history_df = history_service.get_history(
-            limit=history_limit
+            limit=history_limit,
+            user_id=user_id,
+            db=db,
         )
 
         if history_df.empty:
@@ -186,7 +218,9 @@ def get_dashboard(
 
         model_name, forecast_df = (
             forecast_service.generate_forecast(
-                horizon=horizon
+                horizon=horizon,
+                user_id=user_id,
+                db=db,
             )
         )
 
@@ -240,6 +274,12 @@ def get_dashboard(
             forecast_horizon=horizon,
             forecast_model=model_name,
         )
+
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
     except FileNotFoundError as exc:
         raise HTTPException(

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDashboardApi } from '../api/forecast';
 import { getMonitoringSummary } from '../api/monitoring';
 import { listDecisionsApi } from '../api/decisions';
+import { getCurrentDatasetApi } from '../api/datasets';
 import { extractErrorMessage } from '../api/axios';
 import KpiCard from '../components/KpiCard';
 import SalesChart from '../components/SalesChart';
@@ -22,6 +23,7 @@ import {
   Sliders,
   Bell,
   ArrowRight,
+  Database,
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../utils/formatters';
 import { FORECAST_HORIZONS, MODEL_DESCRIPTIONS } from '../utils/constants';
@@ -39,6 +41,16 @@ const Dashboard = () => {
   const [intelLoading, setIntelLoading] = useState(true);
   const [intelError, setIntelError] = useState(false);
   const [decisionsError, setDecisionsError] = useState(false);
+  const [currentDataset, setCurrentDataset] = useState(null);
+
+  const fetchCurrentDataset = useCallback(async () => {
+    try {
+      const data = await getCurrentDatasetApi();
+      setCurrentDataset(data);
+    } catch {
+      setCurrentDataset(null);
+    }
+  }, []);
 
   const fetchDashboard = useCallback(async (selectedHorizon) => {
     try {
@@ -85,7 +97,8 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboard(horizon);
     fetchIntelligenceData();
-  }, [horizon, fetchDashboard, fetchIntelligenceData]);
+    fetchCurrentDataset();
+  }, [horizon, fetchDashboard, fetchIntelligenceData, fetchCurrentDataset]);
 
   const handleHorizonChange = (newHorizon) => {
     if (newHorizon !== horizon) {
@@ -134,6 +147,30 @@ const Dashboard = () => {
             );
           })}
         </div>
+      </div>
+
+      {/* Active Dataset Status Strip */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
+        <div className="flex items-center space-x-2.5">
+          <Database className={`w-4 h-4 ${currentDataset ? 'text-emerald-400' : 'text-amber-400'}`} />
+          <div>
+            <span className="font-semibold text-slate-200">
+              {currentDataset ? `Active Dataset: ${currentDataset.filename || currentDataset.original_filename}` : 'Using Baseline Repository Dataset'}
+            </span>
+            <span className="text-slate-400 ml-2 hidden sm:inline">
+              {currentDataset
+                ? `(${formatNumber(currentDataset.rows_imported ?? currentDataset.row_count ?? 0)} records, ${currentDataset.start_date || currentDataset.min_date} → ${currentDataset.end_date || currentDataset.max_date})`
+                : '• Upload your own sales CSV to switch predictions and intelligence to your tenant data.'}
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/datasets')}
+          className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 cursor-pointer self-start sm:self-auto"
+        >
+          <span>{currentDataset ? 'Switch / Manage' : 'Upload Dataset'}</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {error ? (

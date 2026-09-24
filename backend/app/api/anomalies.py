@@ -1,15 +1,22 @@
+from __future__ import annotations
+
 import datetime as dt
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
+from backend.app.database.database import get_db
+from backend.app.database.models import User
+from backend.app.dependencies import get_current_user_optional
 from backend.app.schemas.anomalies import (
     AnomalyItem,
     AnomalyListResponse,
     AnomalySummary,
 )
 from backend.app.services.anomaly_service import AnomalyDetectionService
+from backend.app.services.dataset_runtime_service import NoActiveDatasetError
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +75,8 @@ def list_anomalies(
         le=90,
         description="Rolling window size in days for historical baseline calculation",
     ),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -76,6 +85,7 @@ def list_anomalies(
         )
 
     try:
+        user_id = current_user.id if current_user else None
         return anomaly_service.get_anomalies(
             metric=metric,
             severity=severity,
@@ -88,7 +98,14 @@ def list_anomalies(
             skip=skip,
             limit=limit,
             window=window,
+            user_id=user_id,
+            db=db,
         )
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except FileNotFoundError as exc:
         logger.error("Required dataset file missing: %s", exc)
         raise HTTPException(
@@ -122,6 +139,8 @@ def get_anomaly_summary(
     start_date: dt.date | None = Query(default=None),
     end_date: dt.date | None = Query(default=None),
     window: int = Query(default=28, ge=7, le=90),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -130,6 +149,7 @@ def get_anomaly_summary(
         )
 
     try:
+        user_id = current_user.id if current_user else None
         response = anomaly_service.get_anomalies(
             metric=metric,
             severity=severity,
@@ -140,8 +160,15 @@ def get_anomaly_summary(
             skip=0,
             limit=1,
             window=window,
+            user_id=user_id,
+            db=db,
         )
         return response.summary
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Failed to compute anomaly summary: %s", exc)
         raise HTTPException(
@@ -160,16 +187,26 @@ def get_recent_anomalies(
     limit: int = Query(default=10, ge=1, le=100),
     metric: Literal["quantity", "sales_amount"] | None = Query(default=None),
     severity: Literal["low", "medium", "high", "critical"] | None = Query(default=None),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     try:
+        user_id = current_user.id if current_user else None
         response = anomaly_service.get_anomalies(
             metric=metric,
             severity=severity,
             entity_type="aggregate",
             skip=0,
             limit=limit,
+            user_id=user_id,
+            db=db,
         )
         return response.items
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Failed to retrieve recent anomalies: %s", exc)
         raise HTTPException(
@@ -190,8 +227,11 @@ def get_product_anomalies(
     severity: Literal["low", "medium", "high", "critical"] | None = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
     try:
+        user_id = current_user.id if current_user else None
         return anomaly_service.get_anomalies(
             metric=metric,
             severity=severity,
@@ -199,7 +239,14 @@ def get_product_anomalies(
             entity_id=str(product_id),
             skip=skip,
             limit=limit,
+            user_id=user_id,
+            db=db,
         )
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Failed to retrieve product anomalies: %s", exc)
         raise HTTPException(

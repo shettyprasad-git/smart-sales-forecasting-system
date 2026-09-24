@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 import pandas as pd
 
@@ -12,38 +12,45 @@ DATASET_PATH = (
 )
 
 
+from typing import Any
+import pandas as pd
+
+from backend.app.services.dataset_runtime_service import (
+    dataset_runtime_service,
+)
+
+
 class HistoryService:
     """
-    Provides historical demand data for dashboard visualization.
-
-    The current production forecasting models are trained on the
-    processed historical forecasting dataset, so this service reads
-    from the same dataset.
+    Provides historical demand, revenue, and profit data for dashboard visualization.
+    Loads active user dataset via DatasetRuntimeService with user-isolation.
     """
 
     def get_history(
         self,
         limit: int = 365,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> pd.DataFrame:
-
-        if not DATASET_PATH.exists():
-            raise FileNotFoundError(
-                f"Processed dataset not found: {DATASET_PATH}"
-            )
 
         if limit < 1:
             raise ValueError(
                 "limit must be greater than 0."
             )
 
-        df = pd.read_csv(
-            DATASET_PATH,
-            parse_dates=["Date"],
+        df = dataset_runtime_service.get_daily_aggregate(
+            user_id=user_id,
+            db=db,
         )
 
         if df.empty:
-            raise ValueError(
-                "Processed forecasting dataset is empty."
+            return pd.DataFrame(
+                columns=[
+                    "Date",
+                    "Quantity",
+                    "Sales_Amount",
+                    "Profit",
+                ]
             )
 
         required_columns = [

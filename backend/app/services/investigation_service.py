@@ -26,12 +26,18 @@ PRODUCT_DATASET_PATH = (
 )
 
 
+from backend.app.services.dataset_runtime_service import (
+    dataset_runtime_service,
+)
+
+
 class InvestigationService:
     """
     Production Root-Cause Attribution service for investigating sales anomalies.
     Decomposes observed deviations into contributing dimensions (promotions, holidays,
     categories, products, pricing, discounts, and pre-existing trend/drift) using
     strict causal historical baselines (zero lookahead leakage).
+    Integrates with DatasetRuntimeService for user-isolated datasets.
     """
 
     def __init__(
@@ -40,36 +46,16 @@ class InvestigationService:
         self.anomaly_service = anomaly_service or AnomalyDetectionService()
         self._product_df: pd.DataFrame | None = None
 
-    def _load_product_data(self) -> pd.DataFrame:
-        """Load and cache the product-level daily sales dataset."""
-        if self._product_df is None:
-            if not PRODUCT_DATASET_PATH.exists():
-                raise FileNotFoundError(
-                    f"Product dataset not found: {PRODUCT_DATASET_PATH}"
-                )
-            logger.info("Loading product dataset for root-cause investigation...")
-            df = pd.read_csv(
-                PRODUCT_DATASET_PATH,
-                usecols=[
-                    "Date",
-                    "Product_ID",
-                    "Category_ID",
-                    "Quantity",
-                    "Sales_Amount",
-                    "Unit_Price",
-                    "Discount_Percent",
-                    "Promotion",
-                    "Is_Holiday",
-                    "Product_Name",
-                    "Category_Name",
-                ],
-                parse_dates=["Date"],
-            )
-            df = df.sort_values("Date").reset_index(drop=True)
-            self._product_df = df
-        return self._product_df
+    def _load_product_data(self, user_id: int | None = None, db: Any = None) -> pd.DataFrame:
+        """Load the product-level daily sales dataset for user_id."""
+        return dataset_runtime_service.get_product_daily(user_id=user_id, db=db)
 
-    def find_anomaly_by_id(self, anomaly_id: str) -> AnomalyItem | None:
+    def find_anomaly_by_id(
+        self,
+        anomaly_id: str,
+        user_id: int | None = None,
+        db: Any = None,
+    ) -> AnomalyItem | None:
         """
         Locate an existing anomaly record by ID.
         Uses ID structure: anom-YYYYMMDD-met-ent[-id]
@@ -104,6 +90,8 @@ class InvestigationService:
             start_date=target_date,
             end_date=target_date,
             limit=50,
+            user_id=user_id,
+            db=db,
         )
 
         for item in anomalies_resp.items:
@@ -119,12 +107,14 @@ class InvestigationService:
         include_products: bool = True,
         include_categories: bool = True,
         window: int = 28,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> InvestigationResponse:
         """
         Execute root-cause attribution and impact quantification for an anomaly.
         Guarantees strict causal invariance: all historical reference stats use data strictly prior to date T.
         """
-        anomaly = self.find_anomaly_by_id(anomaly_id)
+        anomaly = self.find_anomaly_by_id(anomaly_id, user_id=user_id, db=db)
         if anomaly is None:
             raise KeyError(f"Anomaly not found with ID: {anomaly_id}")
 
@@ -132,8 +122,8 @@ class InvestigationService:
         window_start = target_date - pd.Timedelta(days=window)
         history_end = target_date - pd.Timedelta(days=1)
 
-        daily_df = self.anomaly_service._load_daily_data()
-        product_df = self._load_product_data()
+        daily_df = self.anomaly_service._load_daily_data(user_id=user_id, db=db)
+        product_df = self._load_product_data(user_id=user_id, db=db)
 
         # Prior historical slice (STRICTLY CAUSAL: Date < target_date)
         daily_prior = daily_df[

@@ -1,4 +1,4 @@
-﻿from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
@@ -10,6 +10,11 @@ from backend.app.database.user_crud import get_user_by_email
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/auth/login"
+)
+
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login",
+    auto_error=False,
 )
 
 
@@ -44,3 +49,21 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_current_user_optional(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db),
+):
+    if not token:
+        return None
+
+    try:
+        payload = decode_access_token(token)
+        email = payload.get("sub")
+        if not email:
+            return None
+    except InvalidTokenError:
+        return None
+
+    return get_user_by_email(db, email)

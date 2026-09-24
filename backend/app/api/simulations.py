@@ -3,9 +3,13 @@ from __future__ import annotations
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from sqlalchemy.orm import Session
+
 from backend.app.core.rate_limiter import rate_limit_heavy_intelligence
+from backend.app.database.database import get_db
 from backend.app.dependencies import get_current_user
 from backend.app.schemas.simulations import SimulationRequest, SimulationResponse
+from backend.app.services.dataset_runtime_service import NoActiveDatasetError
 from backend.app.services.simulation_service import SimulationService
 
 logger = logging.getLogger(__name__)
@@ -33,9 +37,19 @@ simulation_service = SimulationService()
 def create_simulation(
     request: SimulationRequest,
     current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> SimulationResponse:
     try:
-        return simulation_service.run_simulation(request)
+        return simulation_service.run_simulation(
+            request,
+            user_id=current_user.id if current_user else None,
+            db=db,
+        )
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

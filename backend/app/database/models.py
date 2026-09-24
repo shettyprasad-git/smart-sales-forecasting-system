@@ -6,9 +6,11 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,6 +68,12 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    datasets: Mapped[list["DatasetUpload"]] = relationship(
+        "DatasetUpload",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -103,6 +111,17 @@ class Product(Base):
         nullable=False,
     )
 
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    raw_product_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
@@ -112,6 +131,104 @@ class Product(Base):
     sales_records: Mapped[list["SalesRecord"]] = relationship(
         "SalesRecord",
         back_populates="product",
+    )
+
+
+class DatasetUpload(Base):
+    __tablename__ = "dataset_uploads"
+    __table_args__ = (
+        Index(
+            "uq_dataset_uploads_user_active",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(50),
+        primary_key=True,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    original_filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    dataset_key: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    row_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    product_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    category_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    min_date: Mapped[datetime | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
+    max_date: Mapped[datetime | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="active",
+        nullable=False,
+        index=True,
+    )
+
+    validation_summary: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="datasets",
+    )
+
+    sales_records: Mapped[list["SalesRecord"]] = relationship(
+        "SalesRecord",
+        back_populates="dataset",
+        cascade="all, delete-orphan",
     )
 
 
@@ -127,6 +244,13 @@ class SalesRecord(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
         nullable=False,
+        index=True,
+    )
+
+    dataset_id: Mapped[str | None] = mapped_column(
+        String(50),
+        ForeignKey("dataset_uploads.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
 
@@ -193,6 +317,11 @@ class SalesRecord(Base):
 
     product: Mapped["Product"] = relationship(
         "Product",
+        back_populates="sales_records",
+    )
+
+    dataset: Mapped["DatasetUpload | None"] = relationship(
+        "DatasetUpload",
         back_populates="sales_records",
     )
 
