@@ -18,8 +18,10 @@ from backend.app.llm.prompts import (
 )
 from backend.app.llm.provider import (
     LLMConfigurationError,
+    LLMMalformedResponseError,
     LLMProvider,
     LLMProviderError,
+    LLMProviderUnavailableError,
     LLMResponseValidationError,
 )
 from backend.app.schemas.ai_reasoning import AIReasoningResponse
@@ -66,6 +68,26 @@ class GeminiProvider(LLMProvider):
             logger.error("Failed to initialize Google GenAI Client: %s", exc)
             raise LLMConfigurationError(f"Failed to initialize Gemini Client: {exc}") from exc
 
+    def _classify_exception(self, exc: Exception) -> Exception:
+        err_msg = str(exc).lower()
+        if "api_key_invalid" in err_msg or "api key not valid" in err_msg or "invalid api key" in err_msg:
+            return LLMConfigurationError("Gemini API key is invalid or unauthorized.")
+        if "not_found" in err_msg or "is not found" in err_msg:
+            return LLMConfigurationError(f"Configured Gemini model '{self.model_name}' was not found.")
+        if (
+            "resource_exhausted" in err_msg
+            or "unavailable" in err_msg
+            or "503" in err_msg
+            or "429" in err_msg
+            or "rate limit" in err_msg
+            or "quota" in err_msg
+            or "timeout" in err_msg
+            or "timed out" in err_msg
+            or "deadline" in err_msg
+        ):
+            return LLMProviderUnavailableError(f"Gemini provider is currently unavailable or capacity constrained: {exc}")
+        return LLMProviderError(f"Gemini API request failed: {exc}")
+
     def generate_reasoning(self, evidence_package: dict[str, Any]) -> AIReasoningResponse:
         client = self._get_client()
         anomaly_id = evidence_package.get("anomaly", {}).get("anomaly_id", "unknown")
@@ -103,7 +125,7 @@ class GeminiProvider(LLMProvider):
                 elapsed_ms,
                 exc,
             )
-            raise LLMProviderError(f"Gemini API request failed: {exc}") from exc
+            raise self._classify_exception(exc) from exc
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         logger.info(
@@ -117,7 +139,7 @@ class GeminiProvider(LLMProvider):
             # Check if parsed attribute is already available
             if hasattr(response, "parsed") and isinstance(response.parsed, AIReasoningResponse):
                 return response.parsed
-            raise LLMResponseValidationError("Gemini returned an empty response.")
+            raise LLMMalformedResponseError("Gemini returned an empty response.")
 
         try:
             payload = json.loads(raw_text)
@@ -128,7 +150,7 @@ class GeminiProvider(LLMProvider):
                 anomaly_id,
                 exc,
             )
-            raise LLMResponseValidationError(f"Invalid structured response from Gemini: {exc}") from exc
+            raise LLMMalformedResponseError(f"Invalid structured response from Gemini: {exc}") from exc
 
     def generate_recommendations(
         self, recommendation_package: dict[str, Any]
@@ -170,7 +192,7 @@ class GeminiProvider(LLMProvider):
                 elapsed_ms,
                 exc,
             )
-            raise LLMProviderError(f"Gemini API request failed: {exc}") from exc
+            raise self._classify_exception(exc) from exc
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         logger.info(
@@ -183,7 +205,7 @@ class GeminiProvider(LLMProvider):
         if not raw_text:
             if hasattr(response, "parsed") and isinstance(response.parsed, AIRecommendationResponse):
                 return response.parsed
-            raise LLMResponseValidationError("Gemini returned an empty response for recommendations.")
+            raise LLMMalformedResponseError("Gemini returned an empty response for recommendations.")
 
         try:
             payload = json.loads(raw_text)
@@ -194,7 +216,7 @@ class GeminiProvider(LLMProvider):
                 anomaly_id,
                 exc,
             )
-            raise LLMResponseValidationError(f"Invalid structured recommendation response from Gemini: {exc}") from exc
+            raise LLMMalformedResponseError(f"Invalid structured recommendation response from Gemini: {exc}") from exc
 
     def generate_simulation_explanation(
         self, simulation_package: dict[str, Any]
@@ -234,7 +256,7 @@ class GeminiProvider(LLMProvider):
                 elapsed_ms,
                 exc,
             )
-            raise LLMProviderError(f"Gemini API request failed: {exc}") from exc
+            raise self._classify_exception(exc) from exc
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         logger.info(

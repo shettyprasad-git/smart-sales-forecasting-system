@@ -126,6 +126,8 @@ const Simulation = () => {
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionSuccess, setDecisionSuccess] = useState(null);
 
+  const isRestrictedScenario = ['price_change', 'discount_change'].includes(scenarioType);
+
   useEffect(() => {
     const incomingAnomalyId = searchParams.get('anomaly_id') || location.state?.anomalyId;
     if (incomingAnomalyId && incomingAnomalyId !== anomalyId) {
@@ -167,6 +169,9 @@ const Simulation = () => {
   };
 
   const handleRunSimulation = async () => {
+    if (['price_change', 'discount_change'].includes(scenarioType)) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -218,7 +223,14 @@ const Simulation = () => {
           </p>
         </div>
 
-        {simulationResult && (
+        {isRestrictedScenario ? (
+          <div className="flex items-center space-x-3">
+            <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 font-semibold flex items-center space-x-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Simulation Restricted</span>
+            </div>
+          </div>
+        ) : simulationResult ? (
           <div className="flex items-center space-x-3">
             <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
               <span className="text-slate-400">Model: </span>
@@ -231,7 +243,7 @@ const Simulation = () => {
               </span>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Error Banner */}
@@ -268,54 +280,49 @@ const Simulation = () => {
         loading={loading}
       />
 
-      {/* Results View */}
-      {simulationResult && (
-        <div className="space-y-6">
-          {/* Unsupported Model Notification */}
-          {simulationResult.status === 'requires_model' && (
-            <div className="bg-amber-950/20 border border-amber-800/40 rounded-2xl p-6 shadow-xl space-y-4">
-              <div className="flex items-start space-x-3">
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-base font-bold text-amber-300">
-                    Model Requirement: {simulationResult.required_model}
-                  </h3>
-                  <p className="text-xs text-amber-200/90 leading-relaxed">
-                    {simulationResult.reason}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    Modeling Boundary
-                  </span>
-                  <ul className="space-y-1 text-xs text-slate-400 list-disc list-inside">
-                    {simulationResult.assumptions.map((a, idx) => (
-                      <li key={idx}>{a}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    Causal Safeguard
-                  </span>
-                  <ul className="space-y-1 text-xs text-slate-400 list-disc list-inside">
-                    {simulationResult.limitations.map((l, idx) => (
-                      <li key={idx}>{l}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+      {/* Results View or Boundary Restriction Notice */}
+      {isRestrictedScenario ? (
+        <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-5">
+          <div className="flex items-start space-x-3.5 p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200">
+            <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-amber-300">
+                Model Boundary Restriction: Dedicated Elasticity Model Required
+              </h3>
+              <p className="text-xs text-amber-200/90 leading-relaxed font-medium">
+                This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Production volume forecasting models do not include econometric price elasticity or discount markdown curves.
+                To prevent uncalibrated or commercially misleading projections, scenario forecasting, revenue impact, and variance outputs are strictly suppressed for this scenario.
+              </p>
             </div>
-          )}
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                Forecasting Boundary
+              </span>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The current production models predict sales volume using autoregressive features, calendar indicators, and historical trend velocity. Simulating price or markdown shifts requires empirical price-elasticity response curves.
+              </p>
+            </div>
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                Causal Safeguard
+              </span>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Execution is disabled to ensure all decision support remains strictly grounded in validated model capabilities. Other scenarios (Demand Multipliers, Shocks, Shifts, Trends, Holiday Trading) remain fully executable.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : simulationResult && simulationResult.status === 'completed' ? (
+        <div className="space-y-6">
           {/* Completed Simulation View */}
-          {simulationResult.status === 'completed' && (
-            <>
+          <>
+            {/* KPI Cards Grid */}
               {/* KPI Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* 1. Baseline Total Quantity */}
@@ -672,11 +679,10 @@ const Simulation = () => {
                 </div>
               </div>
             </>
-          )}
-        </div>
-      )}
-    </div>
-  );
+          </div>
+        ) : null}
+      </div>
+    );
 };
 
 export default Simulation;

@@ -4,6 +4,7 @@ import {
   TrendingUp,
   TrendingDown,
   AlertCircle,
+  AlertTriangle,
   Calendar,
   Sparkles,
   ShieldCheck,
@@ -155,13 +156,18 @@ const SimulationPanel = ({
       {/* Scenario Parameters Form */}
       <div className="bg-slate-950/50 border border-slate-800/80 rounded-xl p-4 space-y-4">
         {activeScenario.requiresModel ? (
-          <div className="flex items-start space-x-3 p-3.5 rounded-xl bg-amber-950/30 border border-amber-800/40 text-amber-200">
-            <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1 text-xs">
-              <span className="font-bold text-amber-300">Model Boundary Restriction</span>
-              <p className="text-amber-200/90 leading-relaxed">
-                The current production forecasting architecture forecasts volume from autoregressive and calendar features.
-                Simulating {activeScenario.name.toLowerCase()} requires dedicated econometric elasticity curves to prevent misleading commercial projections.
+          <div className="flex items-start space-x-3.5 p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 shadow-lg">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1.5 text-xs">
+              <span className="font-bold text-sm text-amber-300 block">
+                Model Boundary Restriction: Dedicated Elasticity Model Required
+              </span>
+              <p className="text-amber-200/90 leading-relaxed font-medium">
+                This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.
+              </p>
+              <p className="text-slate-300 text-[11px] leading-relaxed">
+                The current production forecasting architecture forecasts volume from autoregressive and calendar features without explicit price sensitivity or discount depth parameters.
+                Execution is disabled to avoid ungrounded commercial projections.
               </p>
             </div>
           </div>
@@ -383,13 +389,27 @@ const SimulationPanel = ({
         <button
           type="button"
           onClick={onRunSimulation}
-          disabled={loading}
-          className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-950/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          disabled={loading || activeScenario.requiresModel}
+          title={
+            activeScenario.requiresModel
+              ? "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."
+              : undefined
+          }
+          className={`inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all ${
+            activeScenario.requiresModel
+              ? 'bg-slate-800 text-slate-500 border border-slate-700/80 cursor-not-allowed opacity-60'
+              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-950/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
         >
           {loading ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               <span>Computing Scenario...</span>
+            </>
+          ) : activeScenario.requiresModel ? (
+            <>
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <span>Simulation Restricted</span>
             </>
           ) : (
             <>

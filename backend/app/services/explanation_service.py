@@ -28,12 +28,20 @@ class ExplanationService:
         self.investigation_service = investigation_service or InvestigationService()
 
     def explain_anomaly(
-        self, anomaly_id: str, top_n: int = 3
+        self,
+        anomaly_id: str,
+        top_n: int = 3,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> ExecutiveExplanation:
         """
         Locate and investigate anomaly, then generate deterministic executive narrative.
         """
-        investigation = self.investigation_service.investigate_anomaly(anomaly_id)
+        investigation = self.investigation_service.investigate_anomaly(
+            anomaly_id,
+            user_id=user_id,
+            db=db,
+        )
         return self.generate_explanation(investigation=investigation, top_n=top_n)
 
     def generate_explanation(

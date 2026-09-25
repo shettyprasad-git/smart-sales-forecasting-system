@@ -16,6 +16,7 @@ from backend.app.schemas.simulations import (
 )
 from backend.app.services.simulation_service import (
     SimulationService,
+    UnsupportedScenarioError,
     validate_simulation_result,
 )
 
@@ -177,7 +178,7 @@ def test_simulation_holiday_scenario():
 
 
 # ---------------------------------------------------------------------------
-# 8. Price Change (Requires Econometric Model, returns requires_model)
+# 8. Price Change (Requires Dedicated Elasticity Model, raises UnsupportedScenarioError)
 # ---------------------------------------------------------------------------
 def test_simulation_price_change_requires_model():
     service = SimulationService()
@@ -185,20 +186,13 @@ def test_simulation_price_change_requires_model():
         scenario_type=ScenarioType.PRICE_CHANGE,
         horizon_days=30,
     )
-    res = service.run_simulation(req)
-
-    assert res.status == SimulationStatus.REQUIRES_MODEL
-    assert res.confidence == "not_available"
-    assert res.required_model == "econometric_price_elasticity"
-    assert "price" in res.reason.lower()
-    assert res.baseline is None
-    assert res.scenario is None
-    assert res.delta is None
-    assert len(res.daily_results) == 0
+    with pytest.raises(UnsupportedScenarioError) as exc_info:
+        service.run_simulation(req)
+    assert "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model." in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
-# 9. Discount Change (Requires Discount Model, returns requires_model)
+# 9. Discount Change (Requires Dedicated Elasticity Model, raises UnsupportedScenarioError)
 # ---------------------------------------------------------------------------
 def test_simulation_discount_change_requires_model():
     service = SimulationService()
@@ -206,16 +200,9 @@ def test_simulation_discount_change_requires_model():
         scenario_type=ScenarioType.DISCOUNT_CHANGE,
         horizon_days=30,
     )
-    res = service.run_simulation(req)
-
-    assert res.status == SimulationStatus.REQUIRES_MODEL
-    assert res.confidence == "not_available"
-    assert res.required_model == "discount_elasticity_model"
-    assert "discount" in res.reason.lower()
-    assert res.baseline is None
-    assert res.scenario is None
-    assert res.delta is None
-    assert len(res.daily_results) == 0
+    with pytest.raises(UnsupportedScenarioError) as exc_info:
+        service.run_simulation(req)
+    assert "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model." in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -489,3 +476,25 @@ def test_simulation_llm_explanation_and_fallback():
         assert res_fallback.source == "deterministic"
         assert "Under a hypothetical Demand Multiplier" in res_fallback.explanation
         assert "₹" in res_fallback.explanation
+
+
+def test_api_simulation_price_change_rejected_422(client):
+    headers = get_auth_headers(client, "sim_tester_price_422@example.com")
+    payload = {
+        "scenario_type": "price_change",
+        "horizon_days": 30,
+    }
+    response = client.post("/api/simulations", json=payload, headers=headers)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."
+
+
+def test_api_simulation_discount_change_rejected_422(client):
+    headers = get_auth_headers(client, "sim_tester_discount_422@example.com")
+    payload = {
+        "scenario_type": "discount_change",
+        "horizon_days": 30,
+    }
+    response = client.post("/api/simulations", json=payload, headers=headers)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."

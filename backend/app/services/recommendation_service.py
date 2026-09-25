@@ -866,6 +866,8 @@ class RecommendationService:
         anomaly_id: str,
         refresh: bool = False,
         fallback: bool = True,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> RecommendationResponse:
         """
         Main recommendation pipeline:
@@ -876,19 +878,27 @@ class RecommendationService:
         5. Invoke LLM provider or execute deterministic fallback.
         6. Post-validate and cache.
         """
-        if not refresh and anomaly_id in self._cache:
-            cached_resp = self._cache[anomaly_id].model_copy(deep=True)
+        cache_key = f"{user_id}:{anomaly_id}" if user_id else anomaly_id
+        if not refresh and cache_key in self._cache:
+            cached_resp = self._cache[cache_key].model_copy(deep=True)
             cached_resp.cached = True
             return cached_resp
 
         # 1. Retrieve prior pipeline phase artifacts
-        investigation = self.investigation_service.investigate_anomaly(anomaly_id)
+        investigation = self.investigation_service.investigate_anomaly(
+            anomaly_id,
+            user_id=user_id,
+            db=db,
+        )
         explanation = self.explanation_service.generate_explanation(investigation)
 
         ai_reasoning: AIReasoningResponse | None = None
         try:
             ai_reasoning = self.ai_reasoning_service.reason_about_anomaly(
-                anomaly_id, refresh=refresh
+                anomaly_id,
+                refresh=refresh,
+                user_id=user_id,
+                db=db,
             )
         except Exception as exc:
             logger.info("AI reasoning optional context unavailable for recommendations: %s", exc)

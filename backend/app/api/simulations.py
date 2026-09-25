@@ -10,7 +10,10 @@ from backend.app.database.database import get_db
 from backend.app.dependencies import get_current_user
 from backend.app.schemas.simulations import SimulationRequest, SimulationResponse
 from backend.app.services.dataset_runtime_service import NoActiveDatasetError
-from backend.app.services.simulation_service import SimulationService
+from backend.app.services.simulation_service import (
+    SimulationService,
+    UnsupportedScenarioError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ simulation_service = SimulationService()
     description=(
         "Executes a what-if sales simulation over 7, 30, or 90 days. "
         "Supports demand multipliers, temporary shocks, persistent shifts, trend continuation, "
-        "and promotional/holiday scenarios. Unsupported price/discount changes return status requires_model."
+        "and promotional/holiday scenarios. Unsupported price/discount changes return HTTP 422."
     ),
     dependencies=[Depends(rate_limit_heavy_intelligence)],
 )
@@ -45,6 +48,11 @@ def create_simulation(
             user_id=current_user.id if current_user else None,
             db=db,
         )
+    except UnsupportedScenarioError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except NoActiveDatasetError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -117,21 +117,30 @@ class AIReasoningService:
         self._cache: dict[str, AIReasoningResponse] = {}
 
     def reason_about_anomaly(
-        self, anomaly_id: str, refresh: bool = False
+        self,
+        anomaly_id: str,
+        refresh: bool = False,
+        user_id: int | None = None,
+        db: Any = None,
     ) -> AIReasoningResponse:
         """
         Produce or retrieve cached AI reasoning for an anomaly.
         """
         # 1. Check in-memory cache
-        if not refresh and anomaly_id in self._cache:
-            cached_resp = self._cache[anomaly_id]
-            logger.info("Serving AI reasoning from cache | anomaly_id=%s", anomaly_id)
+        cache_key = f"{user_id}:{anomaly_id}" if user_id else anomaly_id
+        if not refresh and cache_key in self._cache:
+            cached_resp = self._cache[cache_key]
+            logger.info("Serving AI reasoning from cache | key=%s", cache_key)
             return cached_resp.model_copy(update={"cached": True})
 
         start_time = time.perf_counter()
 
         # 2. Retrieve authoritative statistical outputs
-        investigation = self.investigation_service.investigate_anomaly(anomaly_id)
+        investigation = self.investigation_service.investigate_anomaly(
+            anomaly_id,
+            user_id=user_id,
+            db=db,
+        )
         explanation = self.explanation_service.generate_explanation(investigation)
 
         # 3. Build compact evidence package (< 2 KB, zero raw CSV data)

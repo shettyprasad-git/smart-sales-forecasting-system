@@ -32,6 +32,13 @@ from backend.app.services.investigation_service import InvestigationService
 logger = logging.getLogger(__name__)
 
 
+class UnsupportedScenarioError(ValueError):
+    """Raised when a requested scenario is not supported by current forecasting models."""
+
+    pass
+
+
+
 def validate_simulation_result(response: SimulationResponse) -> None:
     """
     Enforce 10 numerical and structural invariants on completed simulation responses.
@@ -232,51 +239,11 @@ class SimulationService:
         model_name = MODEL_CONFIG[request.horizon_days]["model_name"]
 
         # 1. Handle Unsupported Scenarios: price_change and discount_change
-        if request.scenario_type == ScenarioType.PRICE_CHANGE:
-            response = SimulationResponse(
-                status=SimulationStatus.REQUIRES_MODEL,
-                simulation_id=sim_id,
-                anomaly_id=request.anomaly_id,
-                scenario_type=request.scenario_type,
-                horizon_days=request.horizon_days,
-                model_name=model_name,
-                confidence="not_available",
-                reason=(
-                    "Production forecasting models predict volume without explicit price features or price-elasticity estimation. "
-                    "Simulating price changes requires an econometric price-elasticity model estimating own-price and cross-price response."
-                ),
-                required_model="econometric_price_elasticity",
-                assumptions=["Production models predict sales volume without price sensitivity features."],
-                limitations=[
-                    "Cannot evaluate price changes without empirical own-price and cross-price elasticity curves.",
-                    "Arbitrary price shifts without elasticity modeling would yield misleading volume projections.",
-                ],
+        if request.scenario_type in (ScenarioType.PRICE_CHANGE, ScenarioType.DISCOUNT_CHANGE):
+            raise UnsupportedScenarioError(
+                "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."
             )
-            self._cache[sim_id] = response
-            return response
 
-        if request.scenario_type == ScenarioType.DISCOUNT_CHANGE:
-            response = SimulationResponse(
-                status=SimulationStatus.REQUIRES_MODEL,
-                simulation_id=sim_id,
-                anomaly_id=request.anomaly_id,
-                scenario_type=request.scenario_type,
-                horizon_days=request.horizon_days,
-                model_name=model_name,
-                confidence="not_available",
-                reason=(
-                    "Production forecasting models do not include discount depth or markdown elasticity estimation. "
-                    "Simulating discount changes requires a discount elasticity and promotion-depth response model."
-                ),
-                required_model="discount_elasticity_model",
-                assumptions=["Production models do not model discount depth or margin trade-offs."],
-                limitations=[
-                    "Cannot simulate discount depth changes without calibrated promotion-discount response curves.",
-                    "Unmeasured margin and customer retention trade-offs require human validation.",
-                ],
-            )
-            self._cache[sim_id] = response
-            return response
 
         # 2. Extract Anomaly Context if anchored
         anomaly_context: AnomalyContext | None = None

@@ -3,9 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from sqlalchemy.orm import Session
 
+from backend.app.core.config import settings
+from backend.app.database.database import get_db
+from backend.app.database.models import User
+from backend.app.dependencies import get_current_user_optional
 from backend.app.schemas.explanations import ExecutiveExplanation
+from backend.app.services.dataset_runtime_service import NoActiveDatasetError
 from backend.app.services.explanation_service import ExplanationService
 
 logger = logging.getLogger(__name__)
@@ -42,13 +48,29 @@ def get_anomaly_explanation(
         default="json",
         description="Response format (currently supports 'json')",
     ),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
 ):
+    if settings.is_production and current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     try:
+        user_id = current_user.id if current_user else None
         return explanation_service.explain_anomaly(
             anomaly_id=anomaly_id,
             top_n=top_n,
+            user_id=user_id,
+            db=db,
         )
     except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except NoActiveDatasetError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),

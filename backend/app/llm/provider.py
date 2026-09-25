@@ -19,8 +19,16 @@ class LLMProviderError(LLMError):
     """Raised when an external LLM call or API connection fails."""
 
 
+class LLMProviderUnavailableError(LLMProviderError):
+    """Raised when the external LLM provider is unavailable, overloaded, or timing out (HTTP 503)."""
+
+
 class LLMResponseValidationError(LLMError):
     """Raised when LLM output violates required JSON schemas or consistency checks."""
+
+
+class LLMMalformedResponseError(LLMResponseValidationError):
+    """Raised when LLM provider returns unparseable or malformed output (HTTP 502)."""
 
 
 class LLMProvider(ABC):

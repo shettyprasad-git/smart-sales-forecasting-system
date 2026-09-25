@@ -476,10 +476,20 @@ class CompanyModelService:
                     }
                 )
             else:
+                is_job_active = latest_job and latest_job.status in ("queued", "processing", "training", "evaluating")
+                is_job_failed = latest_job and latest_job.status == "failed"
+                status_val = "queued" if is_job_active else ("failed" if is_job_failed else "none")
+                if is_job_active:
+                    msg = f"Training in progress ({latest_job.progress_stage or 'queued'}). Using global pre-trained fallback until complete."
+                elif is_job_failed:
+                    msg = f"Training failed: {latest_job.error_message or 'Internal error'}. Using global pre-trained fallback."
+                else:
+                    msg = "Company model not yet trained. Using global pre-trained model."
+
                 models_list.append(
                     {
                         "horizon": h,
-                        "status": "queued" if latest_job and latest_job.status in ("queued", "processing", "training", "evaluating") else "none",
+                        "status": status_val,
                         "model_type": None,
                         "model_version": active_version or 1,
                         "validation_wape": None,
@@ -492,7 +502,7 @@ class CompanyModelService:
                         "trained_at": None,
                         "is_active": False,
                         "source": "global_fallback",
-                        "status_message": "Company model not yet trained. Using global pre-trained model.",
+                        "status_message": msg,
                     }
                 )
 

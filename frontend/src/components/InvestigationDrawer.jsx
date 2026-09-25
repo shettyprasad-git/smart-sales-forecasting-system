@@ -38,6 +38,24 @@ import {
   formatDate,
 } from '../utils/formatters';
 
+const extractErrorDetails = (err) => {
+  const message = extractErrorMessage(err);
+  const status = err?.response?.status;
+  const isProviderUnavailable =
+    status === 503 ||
+    status === 502 ||
+    status === 429 ||
+    /provider|capacity|unreachable|temporarily unavailable|gateway|model/i.test(message);
+  const isInternal = status === 500 || (!isProviderUnavailable && status >= 500);
+
+  return {
+    message,
+    status,
+    isProviderUnavailable,
+    isInternal,
+  };
+};
+
 const SEVERITY_BADGES = {
   critical: 'bg-rose-500/10 border-rose-500/30 text-rose-400',
   high: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
@@ -151,7 +169,7 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
         const result = await getExplanationApi(anomalyId);
         setExplanation(result);
       } catch (err) {
-        setExplError(extractErrorMessage(err));
+        setExplError(extractErrorDetails(err));
       } finally {
         setExplLoading(false);
       }
@@ -172,7 +190,7 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
         const result = await getAIReasoningApi(anomalyId, { refresh: false });
         setAiData(result);
       } catch (err) {
-        setAiError(extractErrorMessage(err));
+        setAiError(extractErrorDetails(err));
       } finally {
         setAiLoading(false);
       }
@@ -193,7 +211,7 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
         const result = await getRecommendationsApi(anomalyId, { refresh: false });
         setRecData(result);
       } catch (err) {
-        setRecError(extractErrorMessage(err));
+        setRecError(extractErrorDetails(err));
       } finally {
         setRecLoading(false);
       }
@@ -210,7 +228,7 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
       const result = await getAIReasoningApi(anomalyId, { refresh: true });
       setAiData(result);
     } catch (err) {
-      setAiError(extractErrorMessage(err));
+      setAiError(extractErrorDetails(err));
     } finally {
       setAiRefreshing(false);
     }
@@ -224,7 +242,7 @@ const InvestigationDrawer = ({ anomalyId, isOpen, onClose }) => {
       const result = await getRecommendationsApi(anomalyId, { refresh: true });
       setRecData(result);
     } catch (err) {
-      setRecError(extractErrorMessage(err));
+      setRecError(extractErrorDetails(err));
     } finally {
       setRecRefreshing(false);
     }
@@ -585,13 +603,13 @@ ${limitationsList}
               {explError ? (
                 <ErrorMessage
                   title="Executive Brief Generation Failed"
-                  message={explError}
+                  message={explError.message || explError}
                   onRetry={() => {
                     setExplLoading(true);
                     setExplError(null);
                     getExplanationApi(anomalyId)
                       .then(setExplanation)
-                      .catch((err) => setExplError(extractErrorMessage(err)))
+                      .catch((err) => setExplError(extractErrorDetails(err)))
                       .finally(() => setExplLoading(false));
                   }}
                 />
@@ -758,13 +776,40 @@ ${limitationsList}
             /* TAB 3: Phase 6.4 AI Reasoning Layer */
             <div className="space-y-6">
               {aiError ? (
-                <div className="rounded-2xl bg-amber-950/30 border border-amber-500/30 p-5 space-y-3">
-                  <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+                <div
+                  className={`rounded-2xl border p-5 space-y-3 ${
+                    aiError.isProviderUnavailable
+                      ? 'bg-amber-950/30 border-amber-500/30'
+                      : 'bg-rose-950/30 border-rose-500/30'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center space-x-2 font-semibold text-sm ${
+                      aiError.isProviderUnavailable ? 'text-amber-400' : 'text-rose-400'
+                    }`}
+                  >
                     <AlertTriangle className="w-5 h-5" />
-                    <span>AI Reasoning Currently Unavailable</span>
+                    <span>
+                      {aiError.isProviderUnavailable
+                        ? 'AI Reasoning Provider Unavailable'
+                        : 'Internal Application Error'}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-mono border ${
+                        aiError.isProviderUnavailable
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                      }`}
+                    >
+                      {aiError.status ? `HTTP ${aiError.status}` : 'Unavailable'}
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {aiError}
+                  <p
+                    className={`text-xs leading-relaxed ${
+                      aiError.isProviderUnavailable ? 'text-slate-300' : 'text-rose-200/90'
+                    }`}
+                  >
+                    {aiError.message || aiError}
                   </p>
                   <p className="text-[11px] text-slate-400">
                     Deterministic statistical anomaly detection, root-cause driver attribution, and executive briefs remain 100% operational.
@@ -772,7 +817,11 @@ ${limitationsList}
                   <div className="pt-2">
                     <button
                       onClick={() => handleRefreshAI()}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-colors cursor-pointer"
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
+                        aiError.isProviderUnavailable
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+                          : 'bg-rose-500/20 border-rose-500/40 text-rose-300 hover:bg-rose-500/30'
+                      }`}
                     >
                       Retry Reasoning
                     </button>
@@ -989,11 +1038,37 @@ ${limitationsList}
           {activeTab === 'recommendations' && (
             <div className="space-y-6">
               {recError ? (
-                <ErrorMessage
-                  title="Recommendations Unavailable"
-                  message={recError}
-                  onRetry={handleRefreshRec}
-                />
+                recError.isProviderUnavailable ? (
+                  <div className="rounded-2xl bg-amber-950/30 border border-amber-500/30 p-5 space-y-3">
+                    <div className="flex items-center space-x-2 text-amber-400 font-semibold text-sm">
+                      <AlertTriangle className="w-5 h-5" />
+                      <span>Recommendation AI Provider Unavailable</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono border bg-amber-500/20 text-amber-300 border-amber-500/30">
+                        {recError.status ? `HTTP ${recError.status}` : 'Unavailable'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      {recError.message || recError}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Deterministic statistical anomaly detection and root-cause driver attribution remain 100% operational.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={handleRefreshRec}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-colors cursor-pointer"
+                      >
+                        Retry Recommendations
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <ErrorMessage
+                    title="Internal Application Error"
+                    message={recError.message || recError}
+                    onRetry={handleRefreshRec}
+                  />
+                )
               ) : recLoading ? (
                 <div className="py-16">
                   <LoadingSpinner

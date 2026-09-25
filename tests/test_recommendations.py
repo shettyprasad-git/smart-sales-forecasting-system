@@ -1225,3 +1225,14 @@ def test_unsupported_warehouse_backorder_assertions_rejected():
     assert len(validated_accepted) == 1
     assert "Does current warehouse capacity support any future inventory adjustment?" in validated_accepted[0].validation_required
     assert "Are there fulfillment constraints affecting the leading products?" in validated_accepted[0].validation_required
+
+
+def test_api_get_recommendations_requires_auth_in_production(client, sample_anomaly_id):
+    """Unauthenticated calls in production return 401."""
+    from unittest.mock import patch
+    from backend.app.core.config import settings
+
+    with patch.object(settings, "environment", "production"):
+        resp = client.get(f"/api/recommendations/{sample_anomaly_id}")
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Authentication required."

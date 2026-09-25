@@ -372,6 +372,17 @@ def test_api_ai_reasoning_503_on_unconfigured_key(client, sample_anomaly_id):
         assert "currently unavailable" in resp.json()["detail"].lower()
 
 
+def test_api_ai_reasoning_requires_auth_in_production(client, sample_anomaly_id):
+    """Unauthenticated calls in production return 401."""
+    from backend.app.core.config import settings
+
+    with patch.object(settings, "environment", "production"):
+        resp = client.get(f"/api/ai-reasoning/{sample_anomaly_id}")
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Authentication required."
+
+
+
 # =============================================================================
 # Phase 6.4 Grounding & Evidence Consistency Tests
 # =============================================================================

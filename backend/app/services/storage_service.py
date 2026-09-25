@@ -129,6 +129,31 @@ class SupabaseStorageBackend(StorageBackend):
             headers["x-upsert"] = "true"
         return headers
 
+    def _ensure_bucket(self) -> None:
+        """Attempt to auto-create the private Supabase storage bucket if it does not already exist."""
+        import json
+        url = f"{self.supabase_url}/storage/v1/bucket"
+        headers = {
+            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {self.supabase_key}",
+            "Content-Type": "application/json",
+        }
+        payload = json.dumps({
+            "id": self.bucket,
+            "name": self.bucket,
+            "public": False,
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status in (200, 201):
+                    logger.info("Successfully created Supabase storage bucket '%s'", self.bucket)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            logger.debug("Supabase bucket creation response (%s): %s", exc.code, body)
+        except Exception as exc:
+            logger.warning("Could not auto-create Supabase storage bucket '%s': %s", self.bucket, exc)
+
     def upload(self, remote_path: str, data: bytes, content_type: str = "application/octet-stream") -> str:
         clean_path = remote_path.lstrip("/\\")
         url = f"{self.supabase_url}/storage/v1/object/{self.bucket}/{clean_path}"
@@ -142,6 +167,17 @@ class SupabaseStorageBackend(StorageBackend):
                 return clean_path
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
+            # If the bucket does not exist, attempt auto-creation using service credentials and retry upload once
+            if exc.code in (400, 404) and ("NoSuchBucket" in err_body or "Bucket not found" in err_body):
+                logger.info("Supabase bucket '%s' not found. Attempting auto-creation...", self.bucket)
+                self._ensure_bucket()
+                try:
+                    retry_req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+                    with urllib.request.urlopen(retry_req, timeout=30) as retry_resp:
+                        if retry_resp.status in (200, 201):
+                            return clean_path
+                except Exception as retry_exc:
+                    logger.warning("Retry upload after bucket auto-creation failed: %s", retry_exc)
             raise StorageError(f"Supabase upload failed ({exc.code}): {err_body}") from exc
         except Exception as exc:
             raise StorageError(f"Network error during Supabase upload: {exc}") from exc

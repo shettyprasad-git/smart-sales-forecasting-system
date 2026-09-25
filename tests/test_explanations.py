@@ -231,3 +231,14 @@ def test_api_get_explanation_422_invalid_top_n(client, sample_anomaly_id):
 
     resp_too_large = client.get(f"/api/explanations/{sample_anomaly_id}?top_n=99")
     assert resp_too_large.status_code == 422
+
+
+def test_api_get_explanation_requires_auth_in_production(client, sample_anomaly_id):
+    """Unauthenticated calls in production return 401."""
+    from unittest.mock import patch
+    from backend.app.core.config import settings
+
+    with patch.object(settings, "environment", "production"):
+        resp = client.get(f"/api/explanations/{sample_anomaly_id}")
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Authentication required."

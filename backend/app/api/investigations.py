@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import settings
 from backend.app.database.database import get_db
 from backend.app.database.models import User
 from backend.app.dependencies import get_current_user_optional
@@ -50,6 +51,12 @@ def get_anomaly_investigation(
     current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
+    if settings.is_production and current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     try:
         user_id = current_user.id if current_user else None
         return investigation_service.investigate_anomaly(

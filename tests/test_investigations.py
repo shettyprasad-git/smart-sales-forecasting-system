@@ -222,3 +222,14 @@ def test_api_investigation_toggle_flags(client, sample_anomaly_id):
     drivers = res_no_prod.json()["drivers"]
     prod_drivers = [d for d in drivers if d["driver_type"] == "product"]
     assert len(prod_drivers) == 0
+
+
+def test_api_get_investigation_requires_auth_in_production(client, sample_anomaly_id):
+    """Unauthenticated calls in production return 401."""
+    from unittest.mock import patch
+    from backend.app.core.config import settings
+
+    with patch.object(settings, "environment", "production"):
+        resp = client.get(f"/api/investigations/{sample_anomaly_id}")
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Authentication required."

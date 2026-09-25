@@ -480,6 +480,25 @@ const Datasets = () => {
             </div>
           )}
 
+        {/* Training Failed Banner */}
+        {modelsData?.training_job?.status === 'failed' && (
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>Training Job Failed</span>
+              </div>
+              <span className="uppercase text-[10px] tracking-wider px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/30">
+                Failed
+              </span>
+            </div>
+            <p className="text-xs text-rose-200/90 pl-6 break-words">
+              {modelsData.training_job.error_message ||
+                'An error occurred during company model training. Runtime queries will use global pre-trained fallback.'}
+            </p>
+          </div>
+        )}
+
         {/* 3 Horizon Model Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
           {(
@@ -490,11 +509,22 @@ const Datasets = () => {
             ]
           ).map((m) => {
             const isReady = m.status === 'ready';
-            const isTraining = ['queued', 'processing', 'training', 'evaluating'].includes(
-              m.status
-            );
+            const isJobTraining =
+              modelsData?.training_job &&
+              ['queued', 'processing', 'training', 'evaluating'].includes(
+                modelsData.training_job.status
+              );
+            const isJobFailed = modelsData?.training_job?.status === 'failed';
+
+            const isTraining =
+              !isReady &&
+              (['queued', 'processing', 'training', 'evaluating'].includes(m.status) ||
+                isJobTraining);
             const isInsufficient = m.status === 'insufficient_data';
-            const isFailed = m.status === 'failed';
+            const isFailed =
+              !isReady &&
+              !isTraining &&
+              (m.status === 'failed' || (isJobFailed && !isInsufficient));
 
             return (
               <div
@@ -506,6 +536,8 @@ const Datasets = () => {
                     ? 'bg-slate-950/60 border-indigo-500/20'
                     : isTraining
                     ? 'bg-slate-950/60 border-amber-500/30'
+                    : isFailed
+                    ? 'bg-slate-950/60 border-rose-500/30'
                     : 'bg-slate-950/40 border-slate-800'
                 }`}
               >
@@ -531,9 +563,9 @@ const Datasets = () => {
                       : isTraining
                       ? 'Training...'
                       : isInsufficient
-                      ? 'Insufficient History'
+                      ? 'Insufficient History / Global Fallback'
                       : isFailed
-                      ? 'Failed'
+                      ? 'Failed / Global Fallback'
                       : 'Not Trained'}
                   </span>
                 </div>
@@ -545,6 +577,8 @@ const Datasets = () => {
                   <span className="text-sm font-bold text-slate-100 mt-0.5 block truncate">
                     {isReady
                       ? m.model_type
+                      : isTraining
+                      ? 'Training...'
                       : isInsufficient
                       ? 'Global Pretrained Fallback'
                       : 'Global Fallback'}
@@ -578,10 +612,14 @@ const Datasets = () => {
                   </div>
                 ) : (
                   <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400">
-                    {m.status_message ||
-                      (isTraining
-                        ? 'Evaluating candidate algorithms...'
-                        : 'Runtime queries use global pre-trained models.')}
+                    {isFailed
+                      ? (m.status_message ||
+                        modelsData?.training_job?.error_message ||
+                        'Training failed. Runtime queries use global pre-trained fallback.')
+                      : (m.status_message ||
+                        (isTraining
+                          ? 'Evaluating candidate algorithms...'
+                          : 'Runtime queries use global pre-trained models.'))}
                   </div>
                 )}
               </div>
