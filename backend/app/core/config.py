@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_key: str | None = None
     supabase_service_role_key: str | None = None
-    supabase_storage_bucket: str = "models"
+    supabase_storage_bucket: str = "company-models"
     model_storage_local_dir: str | None = None
 
     model_config = SettingsConfigDict(

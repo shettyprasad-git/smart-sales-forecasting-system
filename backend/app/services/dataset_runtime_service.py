@@ -582,21 +582,33 @@ class DatasetRuntimeService:
         self,
         user_id: int | None = None,
         db: Session | None = None,
+        dataset_id: str | None = None,
     ) -> pd.DataFrame:
         """
         Return daily aggregate DataFrame:
         Date, Quantity, Sales_Amount, Profit, Promotions, Holiday_Flag.
-        Strictly isolated by user_id and active dataset_id.
+        Strictly isolated by user_id and dataset_id (or active dataset).
         """
-        active_ds = self.get_active_dataset(db, user_id) if (db and user_id) else None
-        cache_key = (user_id, active_ds.id if active_ds else None, "daily_aggregate")
+        target_ds = None
+        if db and user_id:
+            if dataset_id:
+                target_ds = db.scalars(
+                    select(DatasetUpload).where(
+                        DatasetUpload.id == dataset_id,
+                        DatasetUpload.user_id == user_id,
+                    )
+                ).first()
+            else:
+                target_ds = self.get_active_dataset(db, user_id)
+
+        cache_key = (user_id, target_ds.id if target_ds else None, "daily_aggregate")
 
         with self._lock:
             if cache_key in self._cache:
                 return self._cache[cache_key].copy()
 
-        if active_ds and db and user_id:
-            # Load from database for active dataset
+        if target_ds and db and user_id:
+            # Load from database for target dataset
             stmt = (
                 select(
                     SalesRecord.sale_date.label("Date"),
@@ -608,7 +620,7 @@ class DatasetRuntimeService:
                 )
                 .where(
                     SalesRecord.user_id == user_id,
-                    SalesRecord.dataset_id == active_ds.id,
+                    SalesRecord.dataset_id == target_ds.id,
                 )
                 .group_by(SalesRecord.sale_date)
                 .order_by(SalesRecord.sale_date.asc())
@@ -638,6 +650,12 @@ class DatasetRuntimeService:
             return df.copy()
 
         # Fallback handling
+        if dataset_id:
+            # Explicit dataset_id not found for this user: tenant isolated empty DataFrame
+            return pd.DataFrame(
+                columns=["Date", "Quantity", "Sales_Amount", "Profit", "Promotions", "Holiday_Flag"]
+            )
+
         if settings.is_production:
             raise NoActiveDatasetError(
                 "No active dataset found for this account. Please upload and activate a sales dataset via /datasets."

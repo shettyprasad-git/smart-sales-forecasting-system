@@ -276,8 +276,8 @@ def activate_dataset_endpoint(
     summary="Trigger asynchronous company model training and benchmarking for a dataset",
 )
 def train_dataset_models_endpoint(
+    background_tasks: BackgroundTasks,
     dataset_id: str = FastPath(..., description="Unique dataset identifier"),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TrainTriggerResponse:

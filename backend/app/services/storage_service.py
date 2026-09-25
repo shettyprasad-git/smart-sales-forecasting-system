@@ -113,7 +113,7 @@ class SupabaseStorageBackend(StorageBackend):
         self,
         supabase_url: str,
         supabase_key: str,
-        bucket_name: str = "models",
+        bucket_name: str = "company-models",
     ) -> None:
         self.supabase_url = supabase_url.rstrip("/")
         self.supabase_key = supabase_key

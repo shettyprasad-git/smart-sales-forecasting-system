@@ -16,8 +16,9 @@ from sqlalchemy.exc import IntegrityError
 from backend.app.core.config import Settings
 from backend.app.database.database import SessionLocal
 from backend.app.database.init_db import recover_interrupted_training_jobs
-from backend.app.database.models import CompanyModel, DatasetUpload, ModelTrainingJob, User
+from backend.app.database.models import CompanyModel, DatasetUpload, ModelTrainingJob, SalesRecord, User
 from backend.app.services.company_model_service import company_model_service, training_lock_manager
+from backend.app.services.dataset_runtime_service import dataset_runtime_service
 from backend.app.services.forecast_service import BackendForecastService
 from backend.app.services.storage_service import (
     LocalStorageBackend,
@@ -813,3 +814,157 @@ def test_unresponsive_jobs_auto_failed_on_retrain_request(db_session):
     db_session.refresh(stale_job)
     assert stale_job.status == "failed"
     assert "timed out" in stale_job.error_message
+
+
+# --------------------------------------------------------------------------
+# 27. get_daily_aggregate by dataset_id and Strict Tenant Isolation
+# --------------------------------------------------------------------------
+def test_get_daily_aggregate_by_dataset_id_and_tenant_isolation(db_session):
+    user1 = User(email="tenant_agg1@example.com", password_hash="hash")
+    user2 = User(email="tenant_agg2@example.com", password_hash="hash")
+    db_session.add_all([user1, user2])
+    db_session.flush()
+
+    ds1 = DatasetUpload(id="ds-tenant-1", user_id=user1.id, original_filename="ds1.csv", dataset_key="key1", status="active")
+    ds2 = DatasetUpload(id="ds-tenant-2", user_id=user2.id, original_filename="ds2.csv", dataset_key="key2", status="active")
+    db_session.add_all([ds1, ds2])
+    db_session.flush()
+
+    # Add 5 sales records to user 1's dataset
+    from datetime import date, timedelta
+    for i in range(5):
+        sr = SalesRecord(
+            user_id=user1.id,
+            dataset_id=ds1.id,
+            product_id=1,
+            sale_date=date(2024, 1, 1) + timedelta(days=i),
+            quantity=100.0 + i * 10,
+            unit_price=10.0,
+            sales_amount=1000.0,
+            profit=100.0,
+            promotion=False,
+            holiday_flag=False,
+        )
+        db_session.add(sr)
+    db_session.commit()
+
+    # User 1 requesting their dataset by dataset_id retrieves their rows
+    df1 = dataset_runtime_service.get_daily_aggregate(user_id=user1.id, db=db_session, dataset_id=ds1.id)
+    assert len(df1) == 5
+    assert df1["Quantity"].sum() == 600.0
+
+    # User 2 attempting to retrieve user 1's dataset_id MUST return empty dataframe (tenant isolated)
+    df_isolated = dataset_runtime_service.get_daily_aggregate(user_id=user2.id, db=db_session, dataset_id=ds1.id)
+    assert len(df_isolated) == 0
+
+
+# --------------------------------------------------------------------------
+# 28. Background Training Execution End-to-End & All Horizons READY
+# --------------------------------------------------------------------------
+def test_background_training_execution_end_to_end_all_horizons_ready(db_session):
+    user = User(email="e2e_training_user@example.com", password_hash="hash")
+    db_session.add(user)
+    db_session.flush()
+
+    ds = DatasetUpload(id="ds-e2e-train", user_id=user.id, original_filename="sales.csv", dataset_key="key_e2e", status="active")
+    db_session.add(ds)
+    db_session.flush()
+
+    # Provide 250 daily observations (sufficient for 7D, 30D, and 90D)
+    from datetime import date, timedelta
+    for i in range(250):
+        sr = SalesRecord(
+            user_id=user.id,
+            dataset_id=ds.id,
+            product_id=1,
+            sale_date=date(2023, 1, 1) + timedelta(days=i),
+            quantity=800.0 + 50.0 * np.sin(2 * np.pi * i / 7) + (i % 10),
+            unit_price=25.0,
+            sales_amount=20000.0,
+            profit=5000.0,
+            promotion=(i % 14 == 0),
+            holiday_flag=False,
+        )
+        db_session.add(sr)
+    db_session.commit()
+
+    # Enqueue training job
+    job, acquired = company_model_service.enqueue_training_job(db_session, user.id, ds.id)
+    assert acquired is True
+
+    # Execute training pipeline directly using test database session
+    from tests.conftest import TestingSessionLocal
+    with patch("backend.app.services.company_model_service.SessionLocal", TestingSessionLocal):
+        company_model_service.execute_training_pipeline(user.id, ds.id, job.id)
+
+    db_session.refresh(job)
+    assert job.status == "ready", f"Job failed with: {job.error_message}"
+
+    # Confirm all 3 company models (7D, 30D, 90D) are READY and active
+    summary = company_model_service.get_current_models_summary(db_session, user.id)
+    models_by_h = {m["horizon"]: m for m in summary["models"]}
+
+    assert models_by_h[7]["status"] == "ready"
+    assert models_by_h[7]["is_active"] is True
+    assert models_by_h[7]["source"] == "company"
+    assert models_by_h[7]["validation_wape"] is not None
+
+    assert models_by_h[30]["status"] == "ready"
+    assert models_by_h[30]["is_active"] is True
+    assert models_by_h[30]["source"] == "company"
+    assert models_by_h[30]["validation_wape"] is not None
+
+    assert models_by_h[90]["status"] == "ready"
+    assert models_by_h[90]["is_active"] is True
+    assert models_by_h[90]["source"] == "company"
+    assert models_by_h[90]["validation_wape"] is not None
+
+    # Verify runtime forecast uses company model and does NOT use global fallback
+    forecast_svc = BackendForecastService()
+    for h in [7, 30, 90]:
+        res = forecast_svc.generate_forecast(horizon=h, user_id=user.id, db=db_session)
+        assert res.source == "company"
+        assert res.model_version == 1
+        assert res.model_type in get_candidate_factories()
+        assert res.validation_wape is not None
+        mean_forecast = res.forecast_df["Predicted_Quantity"].mean()
+        assert 600.0 < mean_forecast < 1200.0, f"Forecast mean {mean_forecast} diverged from ~800 units/day"
+
+
+# --------------------------------------------------------------------------
+# 29. Global Fallback Scale Divergence Warning
+# --------------------------------------------------------------------------
+def test_global_fallback_scale_divergence_warning(db_session):
+    user = User(email="scale_diag_user@example.com", password_hash="hash")
+    db_session.add(user)
+    db_session.flush()
+
+    ds = DatasetUpload(id="ds-scale-diag", user_id=user.id, original_filename="divergent.csv", dataset_key="key_diag", status="active")
+    db_session.add(ds)
+    db_session.flush()
+
+    # Small historical dataset with 30 days of ~100 units/day (global model predicts ~3700)
+    from datetime import date, timedelta
+    for i in range(30):
+        sr = SalesRecord(
+            user_id=user.id,
+            dataset_id=ds.id,
+            product_id=1,
+            sale_date=date(2024, 1, 1) + timedelta(days=i),
+            quantity=100.0,
+            unit_price=10.0,
+            sales_amount=1000.0,
+            profit=100.0,
+            promotion=False,
+            holiday_flag=False,
+        )
+        db_session.add(sr)
+    db_session.commit()
+
+    # No company models trained -> falls back to global baseline
+    forecast_svc = BackendForecastService()
+    res = forecast_svc.generate_forecast(horizon=30, user_id=user.id, db=db_session)
+    assert res.source == "global_fallback"
+    assert res.fallback_reason is not None
+    assert "diverges from your dataset" in res.fallback_reason
+    assert "Train company models via the Datasets page" in res.fallback_reason

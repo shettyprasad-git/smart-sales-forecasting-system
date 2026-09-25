@@ -285,6 +285,17 @@ class BackendForecastService:
             events=events,
         )
 
+        if source == "global_fallback" and len(history) > 0:
+            hist_mean = float(pd.Series(history).tail(30).mean())
+            pred_mean = float(forecast_df["Predicted_Quantity"].mean())
+            if hist_mean > 0 and (pred_mean / hist_mean > 2.0 or pred_mean / hist_mean < 0.5):
+                scale_note = (
+                    f"Global pre-trained baseline predicts ~{pred_mean:.0f} units/day, which diverges from your "
+                    f"dataset's recent average (~{hist_mean:.0f} units/day). Train company models via the Datasets page "
+                    f"for tailored predictions."
+                )
+                fallback_reason = f"{fallback_reason} ({scale_note})" if fallback_reason else scale_note
+
         return ForecastResult(
             display_name,
             forecast_df,
