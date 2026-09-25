@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     database_url: str = DEFAULT_SQLITE_URL
     allowed_origins: str | list[str] = "http://localhost:5173,http://127.0.0.1:5173"
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_fallback_model: str = "gemini-3.8-flash"
+    gemini_max_output_tokens: int = 800
     admin_username: str = "admin"
     admin_email: str = "admin@smart-sales.local"
     admin_password: str | None = Field(default=None, repr=False)
