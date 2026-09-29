@@ -15,3 +15,11 @@ export const trainDatasetModelsApi = async (datasetId) => {
   const response = await apiClient.post(`/api/datasets/${datasetId}/train`);
   return response.data;
 };
+
+/**
+ * Get active demand-sensitivity / elasticity model for the current tenant.
+ */
+export const getElasticityModelApi = async () => {
+  const response = await apiClient.get('/api/models/elasticity');
+  return response.data;
+};

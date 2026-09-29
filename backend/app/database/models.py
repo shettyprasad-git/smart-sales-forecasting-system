@@ -80,6 +80,13 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    company_elasticity_models: Mapped[list["CompanyElasticityModel"]] = relationship(
+        "CompanyElasticityModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
 
 class Product(Base):
     __tablename__ = "products"
@@ -242,6 +249,13 @@ class DatasetUpload(Base):
         back_populates="dataset",
         cascade="all, delete-orphan",
     )
+
+    company_elasticity_models: Mapped[list["CompanyElasticityModel"]] = relationship(
+        "CompanyElasticityModel",
+        back_populates="dataset",
+        cascade="all, delete-orphan",
+    )
+
 
 
 class SalesRecord(Base):
@@ -844,6 +858,137 @@ class CompanyModel(Base):
     dataset: Mapped["DatasetUpload"] = relationship(
         "DatasetUpload",
         back_populates="company_models",
+    )
+
+
+class CompanyElasticityModel(Base):
+    __tablename__ = "company_elasticity_models"
+    __table_args__ = (
+        Index(
+            "uq_company_elasticity_models_user_active",
+            "user_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+        Index("ix_company_elasticity_models_user_dataset", "user_id", "dataset_id"),
+        Index("ix_company_elasticity_models_user_version", "user_id", "model_version"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(50),
+        primary_key=True,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    dataset_id: Mapped[str] = mapped_column(
+        ForeignKey("dataset_uploads.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    model_type: Mapped[str] = mapped_column(
+        String(50),
+        default="RidgeLogLog",
+        nullable=False,
+    )
+
+    artifact_path: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    model_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    price_elasticity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    discount_sensitivity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    r2_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    mae: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    rmse: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    training_rows: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    feature_version: Mapped[str] = mapped_column(
+        String(50),
+        default="v1",
+        nullable=False,
+    )
+
+    diagnostics: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30),
+        default="queued",
+        nullable=False,
+        index=True,
+    )
+
+    status_message: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+
+    trained_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="company_elasticity_models",
+    )
+
+    dataset: Mapped["DatasetUpload"] = relationship(
+        "DatasetUpload",
+        back_populates="company_elasticity_models",
     )
 
 

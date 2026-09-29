@@ -42,6 +42,14 @@ class SimulationRequest(BaseModel):
         default=None,
         description="Percentage shift in demand (-50.0 to +50.0%).",
     )
+    price_change_percent: float | None = Field(
+        default=None,
+        description="Percentage shift in unit price (-90.0 to +200.0%).",
+    )
+    discount_change_percent: float | None = Field(
+        default=None,
+        description="Percentage point shift in discount (-100.0 to +100.0%).",
+    )
     shock_duration_days: int | None = Field(
         default=None,
         description="Duration of temporary demand shock in days (1 to horizon_days).",
@@ -73,6 +81,16 @@ class SimulationRequest(BaseModel):
         if self.demand_change_percent is not None:
             if not (-50.0 <= self.demand_change_percent <= 50.0):
                 raise ValueError("demand_change_percent must be between -50.0 and +50.0 percent.")
+
+        # Validate price_change_percent
+        if self.price_change_percent is not None:
+            if not (-90.0 <= self.price_change_percent <= 200.0):
+                raise ValueError("price_change_percent must be between -90.0 and +200.0 percent.")
+
+        # Validate discount_change_percent
+        if self.discount_change_percent is not None:
+            if not (-100.0 <= self.discount_change_percent <= 100.0):
+                raise ValueError("discount_change_percent must be between -100.0 and +100.0 percentage points.")
 
         # Validate shock_duration_days for temporary shock
         if self.scenario_type == ScenarioType.TEMPORARY_SHOCK:
@@ -152,3 +170,15 @@ class SimulationResponse(BaseModel):
     explanation: str | None = Field(default=None, description="Concise narrative interpretation of simulated variance.")
     reason: str | None = Field(default=None, description="Reason for unsupported or unexecuted scenarios.")
     required_model: str | None = Field(default=None, description="Specific model required for unsupported scenario.")
+    elasticity_model_version: int | None = Field(
+        default=None,
+        description="Version number of company elasticity model utilized.",
+    )
+    price_elasticity: float | None = Field(
+        default=None,
+        description="Estimated price elasticity coefficient applied in simulation.",
+    )
+    discount_sensitivity: float | None = Field(
+        default=None,
+        description="Estimated discount sensitivity coefficient applied in simulation.",
+    )

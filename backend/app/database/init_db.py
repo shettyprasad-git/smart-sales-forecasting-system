@@ -172,6 +172,27 @@ def ensure_schema_migrations(engine: Engine) -> None:
         except Exception as exc:
             logger.warning("Could not create partial unique index uq_company_models_user_horizon_active: %s", exc)
 
+    if "company_elasticity_models" in table_names:
+        try:
+            with engine.begin() as conn:
+                if engine.dialect.name == "sqlite":
+                    conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS uq_company_elasticity_models_user_active "
+                            "ON company_elasticity_models (user_id) WHERE is_active = 1;"
+                        )
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS uq_company_elasticity_models_user_active "
+                            "ON company_elasticity_models (user_id) WHERE is_active = true;"
+                        )
+                    )
+            logger.info("Verified/created partial unique index uq_company_elasticity_models_user_active on company_elasticity_models.")
+        except Exception as exc:
+            logger.warning("Could not create partial unique index uq_company_elasticity_models_user_active: %s", exc)
+
 
 def recover_interrupted_training_jobs(engine: Engine, stale_minutes: int = 10) -> None:
     """

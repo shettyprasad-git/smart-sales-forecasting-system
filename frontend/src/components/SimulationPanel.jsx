@@ -13,58 +13,75 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-export const SCENARIO_OPTIONS = [
-  {
-    id: 'demand_multiplier',
-    name: 'Demand Multiplier',
-    description: 'Apply a uniform percentage shift across the entire forecast horizon.',
-    badge: 'Standard',
-  },
-  {
-    id: 'temporary_shock',
-    name: 'Temporary Shock',
-    description: 'Simulate a short-term spike or drop that reverts back to baseline.',
-    badge: 'Reversion',
-  },
-  {
-    id: 'persistent_shift',
-    name: 'Persistent Shift',
-    description: 'Evaluate a sustained structural shift in ongoing customer demand.',
-    badge: 'Structural',
-  },
-  {
-    id: 'trend_continuation',
-    name: 'Trend Continuation',
-    description: 'Project recent linear velocity from historical sales observations.',
-    badge: 'Extrapolation',
-  },
-  {
-    id: 'promotion_scenario',
-    name: 'Promotional Campaign',
-    description: 'Simulate calendar promotional lift using the production ML model.',
-    badge: 'ML Feature',
-  },
-  {
-    id: 'holiday_scenario',
-    name: 'Holiday Trading',
-    description: 'Simulate festive calendar lift using the production ML model.',
-    badge: 'ML Feature',
-  },
-  {
-    id: 'price_change',
-    name: 'Price Change',
-    description: 'Requires econometric price-elasticity model (Not supported by volume model).',
-    badge: 'Requires Model',
-    requiresModel: true,
-  },
-  {
-    id: 'discount_change',
-    name: 'Discount Depth',
-    description: 'Requires discount elasticity model (Not supported by volume model).',
-    badge: 'Requires Model',
-    requiresModel: true,
-  },
-];
+export const getScenarioOptions = (elasticityModel) => {
+  const isPriceReady = elasticityModel?.status === 'ready' && elasticityModel?.price_supported;
+  const isDiscountReady = elasticityModel?.status === 'ready' && elasticityModel?.discount_supported;
+
+  return [
+    {
+      id: 'demand_multiplier',
+      name: 'Demand Multiplier',
+      description: 'Apply a uniform percentage shift across the entire forecast horizon.',
+      badge: 'Standard',
+      requiresModel: false,
+    },
+    {
+      id: 'temporary_shock',
+      name: 'Temporary Shock',
+      description: 'Simulate a short-term spike or drop that reverts back to baseline.',
+      badge: 'Reversion',
+      requiresModel: false,
+    },
+    {
+      id: 'persistent_shift',
+      name: 'Persistent Shift',
+      description: 'Evaluate a sustained structural shift in ongoing customer demand.',
+      badge: 'Structural',
+      requiresModel: false,
+    },
+    {
+      id: 'trend_continuation',
+      name: 'Trend Continuation',
+      description: 'Project recent linear velocity from historical sales observations.',
+      badge: 'Extrapolation',
+      requiresModel: false,
+    },
+    {
+      id: 'promotion_scenario',
+      name: 'Promotional Campaign',
+      description: 'Simulate calendar promotional lift using the production ML model.',
+      badge: 'ML Feature',
+      requiresModel: false,
+    },
+    {
+      id: 'holiday_scenario',
+      name: 'Holiday Trading',
+      description: 'Simulate festive calendar lift using the production ML model.',
+      badge: 'ML Feature',
+      requiresModel: false,
+    },
+    {
+      id: 'price_change',
+      name: 'Price Change',
+      description: isPriceReady
+        ? `Econometric elasticity model (v${elasticityModel.model_version}, β = ${elasticityModel.price_elasticity > 0 ? '+' : ''}${Number(elasticityModel.price_elasticity).toFixed(2)}).`
+        : 'Requires dedicated price-elasticity model (Not supported without trained elasticity model).',
+      badge: isPriceReady ? 'Elasticity' : 'Requires Model',
+      requiresModel: !isPriceReady,
+    },
+    {
+      id: 'discount_change',
+      name: 'Discount Depth',
+      description: isDiscountReady
+        ? `Econometric discount sensitivity model (v${elasticityModel.model_version}, β = ${elasticityModel.discount_sensitivity > 0 ? '+' : ''}${Number(elasticityModel.discount_sensitivity).toFixed(2)}).`
+        : 'Requires dedicated discount elasticity model (Not supported without trained elasticity model).',
+      badge: isDiscountReady ? 'Elasticity' : 'Requires Model',
+      requiresModel: !isDiscountReady,
+    },
+  ];
+};
+
+export const SCENARIO_OPTIONS = getScenarioOptions(null);
 
 const SimulationPanel = ({
   scenarioType,
@@ -81,6 +98,11 @@ const SimulationPanel = ({
   setPromotionActive,
   holidayActive,
   setHolidayActive,
+  priceChangePercent = 0,
+  setPriceChangePercent,
+  discountChangePercent = 0,
+  setDiscountChangePercent,
+  elasticityModel = null,
   anomalyId,
   setAnomalyId,
   includeRevenue,
@@ -90,7 +112,8 @@ const SimulationPanel = ({
   onRunSimulation,
   loading,
 }) => {
-  const activeScenario = SCENARIO_OPTIONS.find((s) => s.id === scenarioType) || SCENARIO_OPTIONS[0];
+  const scenarioOptions = getScenarioOptions(elasticityModel);
+  const activeScenario = scenarioOptions.find((s) => s.id === scenarioType) || scenarioOptions[0];
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
@@ -115,7 +138,7 @@ const SimulationPanel = ({
           Scenario Type
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {SCENARIO_OPTIONS.map((opt) => {
+          {scenarioOptions.map((opt) => {
             const isSelected = scenarioType === opt.id;
             return (
               <button
@@ -163,11 +186,17 @@ const SimulationPanel = ({
                 Model Boundary Restriction: Dedicated Elasticity Model Required
               </span>
               <p className="text-amber-200/90 leading-relaxed font-medium">
-                This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.
+                {scenarioType === 'price_change' && elasticityModel && !elasticityModel.price_supported
+                  ? `Price sensitivity unsupported: ${elasticityModel.price_reason || 'Insufficient price variation in dataset.'}`
+                  : scenarioType === 'discount_change' && elasticityModel && !elasticityModel.discount_supported
+                  ? `Discount sensitivity unsupported: ${elasticityModel.discount_reason || 'Insufficient discount variation in dataset.'}`
+                  : elasticityModel?.status === 'insufficient_data'
+                  ? `Insufficient historical data: ${elasticityModel.status_message || 'Fewer than 30 observations available for elasticity modeling.'}`
+                  : 'This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.'}
               </p>
               <p className="text-slate-300 text-[11px] leading-relaxed">
                 The current production forecasting architecture forecasts volume from autoregressive and calendar features without explicit price sensitivity or discount depth parameters.
-                Execution is disabled to avoid ungrounded commercial projections.
+                Execution is disabled to avoid ungrounded commercial projections. To enable, upload a dataset with varying unit prices and discount rates and retrain company models.
               </p>
             </div>
           </div>
@@ -341,6 +370,84 @@ const SimulationPanel = ({
             </div>
           )}
 
+          {/* Conditional Input: Price Change */}
+          {scenarioType === 'price_change' && !activeScenario.requiresModel && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-slate-300">Price Adjustment</span>
+                <span
+                  className={`font-mono font-bold ${
+                    priceChangePercent > 0
+                      ? 'text-rose-400'
+                      : priceChangePercent < 0
+                      ? 'text-emerald-400'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  {priceChangePercent > 0 ? `+${priceChangePercent}%` : `${priceChangePercent}%`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={priceChangePercent}
+                onChange={(e) => setPriceChangePercent(Number(e.target.value))}
+                className="w-full accent-indigo-500 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>-50% (Markdown)</span>
+                <span>0%</span>
+                <span>+50% (Markup)</span>
+              </div>
+              {elasticityModel && (
+                <div className="text-[10px] text-indigo-300/80 font-mono pt-1">
+                  Active Elasticity β: {elasticityModel.price_elasticity > 0 ? '+' : ''}{Number(elasticityModel.price_elasticity).toFixed(2)} (v{elasticityModel.model_version})
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Conditional Input: Discount Depth Change */}
+          {scenarioType === 'discount_change' && !activeScenario.requiresModel && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-slate-300">Discount Depth Shift</span>
+                <span
+                  className={`font-mono font-bold ${
+                    discountChangePercent > 0
+                      ? 'text-emerald-400'
+                      : discountChangePercent < 0
+                      ? 'text-rose-400'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  {discountChangePercent > 0 ? `+${discountChangePercent}%` : `${discountChangePercent}%`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="-20"
+                max="50"
+                step="1"
+                value={discountChangePercent}
+                onChange={(e) => setDiscountChangePercent(Number(e.target.value))}
+                className="w-full accent-indigo-500 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>-20% (Cut)</span>
+                <span>0%</span>
+                <span>+50% (Deep)</span>
+              </div>
+              {elasticityModel && (
+                <div className="text-[10px] text-indigo-300/80 font-mono pt-1">
+                  Active Sensitivity β: {elasticityModel.discount_sensitivity > 0 ? '+' : ''}{Number(elasticityModel.discount_sensitivity).toFixed(2)} (v{elasticityModel.model_version})
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Anomaly Anchor */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-300 flex items-center space-x-1.5">
@@ -366,7 +473,9 @@ const SimulationPanel = ({
               onChange={(e) => setIncludeRevenue(e.target.checked)}
               className="accent-indigo-500 rounded cursor-pointer"
             />
-            <span>Include ₹ Revenue Simulation (Constant Realized Price)</span>
+            <span>
+              Include ₹ Revenue Simulation {['price_change', 'discount_change'].includes(scenarioType) ? '(Dynamic Effective Price)' : '(Constant Realized Price)'}
+            </span>
           </label>
           <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
             <input

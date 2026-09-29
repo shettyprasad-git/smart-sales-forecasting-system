@@ -82,14 +82,18 @@ def test_all_expected_sqlalchemy_tables_created(tmp_path):
             "decision_audit_events",
             "monitoring_alerts",
             "monitoring_runs",
+            "company_elasticity_models",
         }
         assert expected_tables.issubset(tables)
         assert "users" in tables
+        assert "company_elasticity_models" in tables
 
         # Direct SQL probe to verify table accessibility
         with test_engine.connect() as conn:
             result = conn.execute(text("SELECT count(*) FROM users")).scalar()
             assert result == 0
+            el_count = conn.execute(text("SELECT count(*) FROM company_elasticity_models")).scalar()
+            assert el_count == 0
     finally:
         test_engine.dispose()
 

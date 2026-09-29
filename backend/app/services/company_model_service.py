@@ -11,10 +11,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.database.database import SessionLocal
-from backend.app.database.models import CompanyModel, DatasetUpload, ModelTrainingJob
+from backend.app.database.models import (
+    CompanyElasticityModel,
+    CompanyModel,
+    DatasetUpload,
+    ModelTrainingJob,
+)
 from backend.app.services.dataset_runtime_service import dataset_runtime_service
 from backend.app.services.storage_service import storage_service
 from ml.training.company_trainer import FEATURE_COLUMNS, benchmark_and_train_horizon
+from ml.training.elasticity_trainer import train_company_elasticity
 
 logger = logging.getLogger(__name__)
 
@@ -317,10 +323,119 @@ class CompanyModelService:
                 job.progress_stage = f"Completed {horizon}-day forecasting model"
                 db.commit()
 
+            # 3. Train Company Demand Sensitivity & Elasticity Model
+            try:
+                job.progress_stage = "Training company demand sensitivity model"
+                job.last_heartbeat_at = datetime.now(timezone.utc)
+                db.commit()
+
+                product_df = dataset_runtime_service.get_product_daily(
+                    user_id=user_id,
+                    db=db,
+                    dataset_id=dataset_id,
+                )
+
+                elasticity_result = train_company_elasticity(product_df)
+                cem_id = f"cem-{uuid.uuid4().hex[:12]}"
+                trained_now = datetime.now(timezone.utc)
+
+                if elasticity_result["status"] == "ready":
+                    remote_path = f"models/{user_id}/{dataset_id}/v{model_version}/elasticity/model.joblib"
+                    storage_service.save_artifact(remote_path, elasticity_result["artifact_bytes"])
+
+                    if dataset_is_active:
+                        db.execute(
+                            update(CompanyElasticityModel)
+                            .where(
+                                CompanyElasticityModel.user_id == user_id,
+                                CompanyElasticityModel.is_active == True,
+                            )
+                            .values(is_active=False)
+                        )
+
+                    elasticity_model = CompanyElasticityModel(
+                        id=cem_id,
+                        user_id=user_id,
+                        dataset_id=dataset_id,
+                        model_version=model_version,
+                        artifact_path=remote_path,
+                        model_type="RidgeLogLog",
+                        price_elasticity=elasticity_result.get("price_elasticity"),
+                        discount_sensitivity=elasticity_result.get("discount_sensitivity"),
+                        r2_score=elasticity_result.get("r2_score"),
+                        mae=elasticity_result.get("mae"),
+                        rmse=elasticity_result.get("rmse"),
+                        training_rows=elasticity_result.get("training_rows"),
+                        feature_version="v1",
+                        diagnostics=elasticity_result.get("diagnostics"),
+                        status="ready",
+                        status_message=None,
+                        is_active=dataset_is_active,
+                        trained_at=trained_now,
+                        created_at=trained_now,
+                    )
+                    db.add(elasticity_model)
+                    db.commit()
+                else:
+                    elasticity_model = CompanyElasticityModel(
+                        id=cem_id,
+                        user_id=user_id,
+                        dataset_id=dataset_id,
+                        model_version=model_version,
+                        artifact_path="",
+                        model_type="None",
+                        price_elasticity=None,
+                        discount_sensitivity=None,
+                        r2_score=None,
+                        mae=None,
+                        rmse=None,
+                        training_rows=elasticity_result.get("training_rows"),
+                        feature_version="v1",
+                        diagnostics=elasticity_result.get("diagnostics"),
+                        status=elasticity_result.get("status", "unavailable"),
+                        status_message=elasticity_result.get("status_message"),
+                        is_active=False,
+                        trained_at=trained_now,
+                        created_at=trained_now,
+                    )
+                    db.add(elasticity_model)
+                    db.commit()
+
+            except Exception as e_exc:
+                logger.warning("Error training demand elasticity model for job=%s: %s", job_id, e_exc)
+                try:
+                    cem_id = f"cem-{uuid.uuid4().hex[:12]}"
+                    trained_now = datetime.now(timezone.utc)
+                    elasticity_model = CompanyElasticityModel(
+                        id=cem_id,
+                        user_id=user_id,
+                        dataset_id=dataset_id,
+                        model_version=model_version,
+                        artifact_path="",
+                        model_type="None",
+                        price_elasticity=None,
+                        discount_sensitivity=None,
+                        r2_score=None,
+                        mae=None,
+                        rmse=None,
+                        training_rows=0,
+                        feature_version="v1",
+                        diagnostics={"error": str(e_exc)},
+                        status="unavailable",
+                        status_message=f"Demand sensitivity modeling failed: {e_exc}",
+                        is_active=False,
+                        trained_at=trained_now,
+                        created_at=trained_now,
+                    )
+                    db.add(elasticity_model)
+                    db.commit()
+                except Exception:
+                    pass
+
             # Completed successfully
             job.status = "ready"
             job.last_heartbeat_at = datetime.now(timezone.utc)
-            job.progress_stage = "All forecasting horizons successfully benchmarked and saved"
+            job.progress_stage = "All forecasting horizons and demand sensitivity successfully trained"
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
             logger.info("Training pipeline completed successfully for job=%s", job_id)
@@ -389,6 +504,39 @@ class CompanyModelService:
                     )
                     .values(is_active=False)
                 )
+
+        # Synchronize active elasticity model
+        latest_ready_elasticity = db.scalars(
+            select(CompanyElasticityModel)
+            .where(
+                CompanyElasticityModel.user_id == user_id,
+                CompanyElasticityModel.dataset_id == dataset_id,
+                CompanyElasticityModel.status == "ready",
+            )
+            .order_by(CompanyElasticityModel.model_version.desc(), CompanyElasticityModel.created_at.desc())
+        ).first()
+
+        if latest_ready_elasticity:
+            db.execute(
+                update(CompanyElasticityModel)
+                .where(
+                    CompanyElasticityModel.user_id == user_id,
+                    CompanyElasticityModel.id != latest_ready_elasticity.id,
+                    CompanyElasticityModel.is_active == True,
+                )
+                .values(is_active=False)
+            )
+            latest_ready_elasticity.is_active = True
+        else:
+            db.execute(
+                update(CompanyElasticityModel)
+                .where(
+                    CompanyElasticityModel.user_id == user_id,
+                    CompanyElasticityModel.dataset_id != dataset_id,
+                    CompanyElasticityModel.is_active == True,
+                )
+                .values(is_active=False)
+            )
 
         db.commit()
         logger.info("Updated active company model pointers for user_id=%s, dataset_id=%s with horizon-specific safety", user_id, dataset_id)
@@ -506,11 +654,46 @@ class CompanyModelService:
                     }
                 )
 
+        # Query elasticity model for this dataset
+        elasticity_record = db.scalars(
+            select(CompanyElasticityModel)
+            .where(
+                CompanyElasticityModel.user_id == user_id,
+                CompanyElasticityModel.dataset_id == active_ds.id,
+            )
+            .order_by(
+                CompanyElasticityModel.is_active.desc(),
+                CompanyElasticityModel.model_version.desc(),
+                CompanyElasticityModel.created_at.desc(),
+            )
+        ).first()
+
+        elasticity_summary = None
+        if elasticity_record:
+            diag = elasticity_record.diagnostics or {}
+            elasticity_summary = {
+                "status": elasticity_record.status,
+                "model_type": elasticity_record.model_type,
+                "model_version": elasticity_record.model_version,
+                "price_elasticity": elasticity_record.price_elasticity,
+                "discount_sensitivity": elasticity_record.discount_sensitivity,
+                "r2_score": elasticity_record.r2_score,
+                "mae": elasticity_record.mae,
+                "rmse": elasticity_record.rmse,
+                "training_rows": elasticity_record.training_rows,
+                "price_supported": bool(diag.get("price_supported", elasticity_record.price_elasticity is not None)),
+                "discount_supported": bool(diag.get("discount_supported", elasticity_record.discount_sensitivity is not None)),
+                "status_message": elasticity_record.status_message,
+                "is_active": elasticity_record.is_active,
+                "trained_at": elasticity_record.trained_at,
+            }
+
         return {
             "active_dataset_id": active_ds.id,
             "active_model_version": active_version,
             "training_job": job_dict,
             "models": models_list,
+            "elasticity_model": elasticity_summary,
         }
 
     def resume_stranded_queued_jobs(self, engine: Any = None) -> int:

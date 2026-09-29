@@ -367,5 +367,8 @@ def build_simulation_evidence(
         "assumptions": getattr(simulation, "assumptions", []),
         "limitations": getattr(simulation, "limitations", []),
         "anomaly_context": anomaly_data,
+        "price_elasticity": getattr(simulation, "price_elasticity", None),
+        "discount_sensitivity": getattr(simulation, "discount_sensitivity", None),
+        "elasticity_model_version": getattr(simulation, "elasticity_model_version", None),
     }
 

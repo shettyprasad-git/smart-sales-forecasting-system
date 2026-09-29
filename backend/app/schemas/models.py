@@ -31,11 +31,29 @@ class TrainingJobStatus(BaseModel):
     completed_at: datetime | None = Field(None, description="When job reached terminal state")
 
 
+class ElasticityModelSummary(BaseModel):
+    status: str = Field(..., description="Status: ready, insufficient_data, unavailable, failed, none")
+    model_type: str = Field("RidgeLogLog", description="Model architecture")
+    model_version: int | None = Field(None, description="Model iteration version")
+    price_elasticity: float | None = Field(None, description="Estimated price elasticity coefficient")
+    discount_sensitivity: float | None = Field(None, description="Estimated discount sensitivity coefficient")
+    r2_score: float | None = Field(None, description="Validation R-squared")
+    mae: float | None = Field(None, description="Mean Absolute Error")
+    rmse: float | None = Field(None, description="Root Mean Squared Error")
+    training_rows: int | None = Field(None, description="Number of training observations")
+    price_supported: bool = Field(False, description="Whether price change scenario is supported")
+    discount_supported: bool = Field(False, description="Whether discount depth scenario is supported")
+    status_message: str | None = Field(None, description="Status detail or insufficiency explanation")
+    is_active: bool = Field(False, description="Whether model is currently active")
+    trained_at: datetime | None = Field(None, description="Timestamp when model training completed")
+
+
 class CurrentModelsResponse(BaseModel):
     active_dataset_id: str | None = Field(None, description="Identifier of the currently active dataset")
     active_model_version: int | None = Field(None, description="Active model iteration version")
     training_job: TrainingJobStatus | None = Field(None, description="Latest training job status for active dataset")
     models: list[CompanyModelItem] = Field(default_factory=list, description="Forecasting models across 7D, 30D, and 90D")
+    elasticity_model: ElasticityModelSummary | None = Field(None, description="Company demand sensitivity/elasticity model")
 
 
 class TrainTriggerResponse(BaseModel):

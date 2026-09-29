@@ -143,15 +143,46 @@ class SimulationService:
         investigation_service: InvestigationService | None = None,
         llm_provider: LLMProvider | None = None,
         cache: dict[str, SimulationResponse] | None = None,
+        elasticity_model: Any = None,
     ) -> None:
         self.forecast_service = forecast_service or BackendForecastService()
         self.investigation_service = investigation_service or InvestigationService()
         self.llm_provider = llm_provider or GeminiProvider()
         self._cache: dict[str, SimulationResponse] = cache if cache is not None else _SIMULATION_CACHE
+        self._mock_elasticity_model = elasticity_model
 
     def get_simulation(self, simulation_id: str) -> SimulationResponse | None:
         """Retrieve a cached simulation result by ID."""
         return self._cache.get(simulation_id)
+
+    def _get_active_elasticity_model(
+        self,
+        user_id: int | None = None,
+        db: Any = None,
+    ) -> Any:
+        """Loads active ready elasticity model for user_id, with mock support."""
+        if self._mock_elasticity_model is not None:
+            return self._mock_elasticity_model
+        if db is None or user_id is None:
+            return None
+        try:
+            from sqlalchemy import select
+            from backend.app.database.models import CompanyElasticityModel
+
+            stmt = (
+                select(CompanyElasticityModel)
+                .where(
+                    CompanyElasticityModel.user_id == user_id,
+                    CompanyElasticityModel.is_active == True,
+                    CompanyElasticityModel.status == "ready",
+                )
+                .order_by(CompanyElasticityModel.created_at.desc())
+            )
+            return db.scalars(stmt).first()
+        except Exception as exc:
+            logger.warning("Could not query active elasticity model: %s", exc)
+            return None
+
 
     def _get_baseline_realized_price(
         self,
@@ -192,7 +223,10 @@ class SimulationService:
         return 3400.87
 
     def _generate_deterministic_explanation(
-        self, response: SimulationResponse, unit_price: float
+        self,
+        response: SimulationResponse,
+        unit_price: float,
+        scenario_unit_price: float | None = None,
     ) -> str:
         """Generates deterministic, executive-ready explanation of pre-calculated simulation results."""
         if response.baseline is None or response.scenario is None or response.delta is None:
@@ -215,9 +249,29 @@ class SimulationService:
             baseline_rev = response.baseline.total_revenue
             rev_delta = response.delta.revenue_delta
             rev_pct = response.delta.revenue_delta_percent or 0.0
+            if response.scenario_type == ScenarioType.PRICE_CHANGE and scenario_unit_price is not None:
+                explanation_parts.append(
+                    f"Projected revenue is ₹{scenario_rev:,.2f} versus baseline ₹{baseline_rev:,.2f} "
+                    f"({rev_delta:+,.2f}, {rev_pct:+.1f}%), evaluating price adjustment from ₹{unit_price:,.2f} to ₹{scenario_unit_price:,.2f}."
+                )
+            elif response.scenario_type == ScenarioType.DISCOUNT_CHANGE and scenario_unit_price is not None:
+                explanation_parts.append(
+                    f"Projected revenue is ₹{scenario_rev:,.2f} versus baseline ₹{baseline_rev:,.2f} "
+                    f"({rev_delta:+,.2f}, {rev_pct:+.1f}%), evaluating effective markdown selling price of ₹{scenario_unit_price:,.2f}."
+                )
+            else:
+                explanation_parts.append(
+                    f"Projected revenue is ₹{scenario_rev:,.2f} versus baseline ₹{baseline_rev:,.2f} "
+                    f"({rev_delta:+,.2f}, {rev_pct:+.1f}%), assuming a constant realized unit price of ₹{unit_price:,.2f}."
+                )
+
+        if response.scenario_type == ScenarioType.PRICE_CHANGE and response.price_elasticity is not None:
             explanation_parts.append(
-                f"Projected revenue is ₹{scenario_rev:,.2f} versus baseline ₹{baseline_rev:,.2f} "
-                f"({rev_delta:+,.2f}, {rev_pct:+.1f}%), assuming a constant realized unit price of ₹{unit_price:,.2f}."
+                f"Demand sensitivity was evaluated using estimated historical price elasticity of {response.price_elasticity:+.3f} (observational correlation; not guaranteed causal effect)."
+            )
+        elif response.scenario_type == ScenarioType.DISCOUNT_CHANGE and response.discount_sensitivity is not None:
+            explanation_parts.append(
+                f"Demand sensitivity was evaluated using estimated historical discount sensitivity coefficient of {response.discount_sensitivity:+.3f} (observational correlation; not guaranteed causal effect)."
             )
 
         explanation_parts.append(
@@ -238,11 +292,55 @@ class SimulationService:
         sim_id = f"sim-{uuid.uuid4().hex[:12]}"
         model_name = MODEL_CONFIG[request.horizon_days]["model_name"]
 
-        # 1. Handle Unsupported Scenarios: price_change and discount_change
+        # 1. Handle Elasticity Scenarios: price_change and discount_change
+        elasticity_model: Any = None
         if request.scenario_type in (ScenarioType.PRICE_CHANGE, ScenarioType.DISCOUNT_CHANGE):
-            raise UnsupportedScenarioError(
-                "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."
-            )
+            elasticity_model = self._get_active_elasticity_model(user_id=user_id, db=db)
+            if not elasticity_model:
+                # Check if there is an inactive/insufficient model in DB to provide the precise diagnostic reason
+                if db is not None and user_id is not None:
+                    try:
+                        from sqlalchemy import select
+                        from backend.app.database.models import CompanyElasticityModel
+
+                        latest_model = db.scalars(
+                            select(CompanyElasticityModel)
+                            .where(CompanyElasticityModel.user_id == user_id)
+                            .order_by(CompanyElasticityModel.created_at.desc())
+                        ).first()
+                        if latest_model and latest_model.status in ("unavailable", "insufficient_data"):
+                            diag = latest_model.diagnostics or {}
+                            if request.scenario_type == ScenarioType.PRICE_CHANGE and diag.get("price_reason"):
+                                raise UnsupportedScenarioError(diag["price_reason"])
+                            if request.scenario_type == ScenarioType.DISCOUNT_CHANGE and diag.get("discount_reason"):
+                                raise UnsupportedScenarioError(diag["discount_reason"])
+                            if latest_model.status_message:
+                                raise UnsupportedScenarioError(latest_model.status_message)
+                    except UnsupportedScenarioError:
+                        raise
+                    except Exception:
+                        pass
+                raise UnsupportedScenarioError(
+                    "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."
+                )
+
+            # Check specific feature capability on the ready model
+            diag = getattr(elasticity_model, "diagnostics", None) or {}
+            if request.scenario_type == ScenarioType.PRICE_CHANGE:
+                price_supported = diag.get("price_supported", getattr(elasticity_model, "price_elasticity", None) is not None)
+                if not price_supported:
+                    raise UnsupportedScenarioError(
+                        diag.get("price_reason")
+                        or "Price Change is unavailable because the active dataset does not contain sufficient historical price variation to estimate demand sensitivity."
+                    )
+            elif request.scenario_type == ScenarioType.DISCOUNT_CHANGE:
+                discount_supported = diag.get("discount_supported", getattr(elasticity_model, "discount_sensitivity", None) is not None)
+                if not discount_supported:
+                    raise UnsupportedScenarioError(
+                        diag.get("discount_reason")
+                        or "Discount Depth is unavailable because the active dataset does not contain sufficient historical discount variation to estimate discount sensitivity."
+                    )
+
 
 
         # 2. Extract Anomaly Context if anchored
@@ -305,6 +403,7 @@ class SimulationService:
 
         # 4. Generate Scenario Forecast per Scenario Type
         scenario_quantities = np.zeros_like(baseline_quantities)
+        scenario_unit_price = unit_price
 
         if request.scenario_type == ScenarioType.DEMAND_MULTIPLIER:
             pct = request.demand_change_percent if request.demand_change_percent is not None else 0.0
@@ -433,11 +532,89 @@ class SimulationService:
                 )
             confidence = "high"
 
-        if request.include_revenue:
-            assumptions.append(
-                f"Revenue calculated under constant baseline realized unit price assumption (₹{unit_price:,.2f} per unit). Price elasticity and customer margin dynamics are not modeled."
+        elif request.scenario_type == ScenarioType.PRICE_CHANGE:
+            pct = request.price_change_percent if request.price_change_percent is not None else (
+                request.demand_change_percent if request.demand_change_percent is not None else 0.0
             )
-            limitations.append("Price elasticity and profit margin trade-offs must be validated separately.")
+            p0 = unit_price
+            p1 = round(p0 * (1.0 + pct / 100.0), 2)
+            if p1 <= 0:
+                raise ValueError(f"Scenario unit price must be strictly positive (computed ₹{p1:.2f} from {pct:+.1f}% shift).")
+
+            beta_p = getattr(elasticity_model, "price_elasticity", -1.0)
+            if beta_p is None:
+                beta_p = -1.0
+
+            price_ratio = 1.0 + (pct / 100.0)
+            mult = math.pow(price_ratio, beta_p)
+            scenario_quantities = np.maximum(0.0, baseline_quantities * mult)
+            scenario_unit_price = p1
+            model_name = f"Elasticity (RidgeLogLog v{getattr(elasticity_model, 'model_version', 1)})"
+            confidence = "high" if abs(pct) <= 20.0 else "medium"
+
+            assumptions.append(
+                f"Unit price shifted by {pct:+.1f}% relative to baseline (from ₹{p0:,.2f} to ₹{p1:,.2f})."
+            )
+            assumptions.append(
+                f"Demand adjusted via company elasticity model v{getattr(elasticity_model, 'model_version', 1)} "
+                f"(estimated price elasticity: {beta_p:+.4f})."
+            )
+            limitations.append(
+                "Estimated historical price sensitivity reflects observational correlation and does not guarantee causal market outcomes."
+            )
+
+        elif request.scenario_type == ScenarioType.DISCOUNT_CHANGE:
+            pct = request.discount_change_percent if request.discount_change_percent is not None else (
+                request.demand_change_percent if request.demand_change_percent is not None else 0.0
+            )
+            base_discount = 0.0
+            scenario_discount = min(100.0, max(0.0, base_discount + pct))
+
+            beta_d = getattr(elasticity_model, "discount_sensitivity", 0.5)
+            if beta_d is None:
+                beta_d = 0.5
+
+            delta_norm = (scenario_discount - base_discount) / 100.0
+            mult = math.exp(beta_d * delta_norm)
+            scenario_quantities = np.maximum(0.0, baseline_quantities * mult)
+
+            # Effective selling prices
+            eff_base = round(unit_price * (1.0 - base_discount / 100.0), 2)
+            eff_scen = round(unit_price * (1.0 - scenario_discount / 100.0), 2)
+            if eff_scen < 0:
+                eff_scen = 0.0
+
+            unit_price = eff_base
+            scenario_unit_price = eff_scen
+            model_name = f"Elasticity (RidgeLogLog v{getattr(elasticity_model, 'model_version', 1)})"
+            confidence = "high" if abs(pct) <= 20.0 else "medium"
+
+            assumptions.append(
+                f"Discount depth changed by {pct:+.1f} percentage points ({base_discount:.1f}% -> {scenario_discount:.1f}%). "
+                f"Effective selling price shifted from ₹{eff_base:,.2f} to ₹{eff_scen:,.2f}."
+            )
+            assumptions.append(
+                f"Demand adjusted via company elasticity model v{getattr(elasticity_model, 'model_version', 1)} "
+                f"(estimated discount sensitivity: {beta_d:+.4f})."
+            )
+            limitations.append(
+                "Estimated discount sensitivity reflects observational historical promotion markdown response without basket cross-elasticity."
+            )
+
+        if request.include_revenue:
+            if request.scenario_type == ScenarioType.PRICE_CHANGE:
+                assumptions.append(
+                    f"Revenue calculated under dynamic scenario unit price (baseline: ₹{unit_price:,.2f}, scenario: ₹{scenario_unit_price:,.2f})."
+                )
+            elif request.scenario_type == ScenarioType.DISCOUNT_CHANGE:
+                assumptions.append(
+                    f"Revenue calculated under dynamic effective markdown price (baseline: ₹{unit_price:,.2f}, scenario: ₹{scenario_unit_price:,.2f})."
+                )
+            else:
+                assumptions.append(
+                    f"Revenue calculated under constant baseline realized unit price assumption (₹{unit_price:,.2f} per unit). Price elasticity and customer margin dynamics are not modeled."
+                )
+                limitations.append("Price elasticity and profit margin trade-offs must be validated separately.")
 
         # 5. Build Daily Simulation Results
         daily_results: list[DailySimulationResult] = []
@@ -453,7 +630,7 @@ class SimulationService:
             d_r: float | None = None
             if request.include_revenue:
                 b_r = round(b_q * unit_price, 2)
-                s_r = round(s_q * unit_price, 2)
+                s_r = round(s_q * scenario_unit_price, 2)
                 d_r = round(s_r - b_r, 2)
 
             daily_results.append(
@@ -530,6 +707,9 @@ class SimulationService:
             confidence=confidence,
             source="deterministic",
             explanation=None,
+            elasticity_model_version=getattr(elasticity_model, "model_version", None) if elasticity_model else None,
+            price_elasticity=getattr(elasticity_model, "price_elasticity", None) if elasticity_model else None,
+            discount_sensitivity=getattr(elasticity_model, "discount_sensitivity", None) if elasticity_model else None,
         )
 
         # 7. Validate 10 Invariants
@@ -537,7 +717,7 @@ class SimulationService:
 
         # 8. Narrative Explanation Generation
         if request.include_explanation:
-            deterministic_exp = self._generate_deterministic_explanation(response, unit_price)
+            deterministic_exp = self._generate_deterministic_explanation(response, unit_price, scenario_unit_price)
             if self.llm_provider and isinstance(self.llm_provider, GeminiProvider) and self.llm_provider.api_key:
                 try:
                     evidence_pkg = build_simulation_evidence(response)

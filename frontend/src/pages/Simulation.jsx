@@ -34,6 +34,7 @@ import {
 import SimulationPanel from '../components/SimulationPanel';
 import { runSimulationApi } from '../api/simulations';
 import { createDecisionApi } from '../api/decisions';
+import { getCurrentModelsApi } from '../api/models';
 import { formatCurrency, formatQuantity, formatDate, formatPercent, formatNumber } from '../utils/formatters';
 
 const CustomChartTooltip = ({ active, payload, label }) => {
@@ -115,9 +116,14 @@ const Simulation = () => {
   const [trendWindowDays, setTrendWindowDays] = useState(28);
   const [promotionActive, setPromotionActive] = useState(true);
   const [holidayActive, setHolidayActive] = useState(true);
+  const [priceChangePercent, setPriceChangePercent] = useState(-10);
+  const [discountChangePercent, setDiscountChangePercent] = useState(10);
   const [anomalyId, setAnomalyId] = useState(initialAnomalyId);
   const [includeRevenue, setIncludeRevenue] = useState(true);
   const [includeExplanation, setIncludeExplanation] = useState(true);
+
+  // Elasticity Model Registry State
+  const [elasticityModel, setElasticityModel] = useState(null);
 
   // Execution State
   const [loading, setLoading] = useState(false);
@@ -126,7 +132,27 @@ const Simulation = () => {
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionSuccess, setDecisionSuccess] = useState(null);
 
-  const isRestrictedScenario = ['price_change', 'discount_change'].includes(scenarioType);
+  const isPriceRestricted =
+    scenarioType === 'price_change' &&
+    !(elasticityModel?.status === 'ready' && elasticityModel?.price_supported);
+  const isDiscountRestricted =
+    scenarioType === 'discount_change' &&
+    !(elasticityModel?.status === 'ready' && elasticityModel?.discount_supported);
+  const isRestrictedScenario = isPriceRestricted || isDiscountRestricted;
+
+  useEffect(() => {
+    const fetchElasticityMetadata = async () => {
+      try {
+        const data = await getCurrentModelsApi();
+        if (data?.elasticity_model) {
+          setElasticityModel(data.elasticity_model);
+        }
+      } catch (err) {
+        console.warn('Unable to load elasticity model metadata', err);
+      }
+    };
+    fetchElasticityMetadata();
+  }, []);
 
   useEffect(() => {
     const incomingAnomalyId = searchParams.get('anomaly_id') || location.state?.anomalyId;
@@ -169,7 +195,7 @@ const Simulation = () => {
   };
 
   const handleRunSimulation = async () => {
-    if (['price_change', 'discount_change'].includes(scenarioType)) {
+    if (isRestrictedScenario) {
       return;
     }
     setLoading(true);
@@ -185,6 +211,8 @@ const Simulation = () => {
         trend_window_days: scenarioType === 'trend_continuation' ? trendWindowDays : 28,
         promotion_active: promotionActive,
         holiday_active: holidayActive,
+        price_change_percent: scenarioType === 'price_change' ? priceChangePercent : null,
+        discount_change_percent: scenarioType === 'discount_change' ? discountChangePercent : null,
         anomaly_id: anomalyId.trim() ? anomalyId.trim() : null,
         include_revenue: includeRevenue,
         include_explanation: includeExplanation,
@@ -270,6 +298,11 @@ const Simulation = () => {
         setPromotionActive={setPromotionActive}
         holidayActive={holidayActive}
         setHolidayActive={setHolidayActive}
+        priceChangePercent={priceChangePercent}
+        setPriceChangePercent={setPriceChangePercent}
+        discountChangePercent={discountChangePercent}
+        setDiscountChangePercent={setDiscountChangePercent}
+        elasticityModel={elasticityModel}
         anomalyId={anomalyId}
         setAnomalyId={setAnomalyId}
         includeRevenue={includeRevenue}
@@ -290,7 +323,13 @@ const Simulation = () => {
                 Model Boundary Restriction: Dedicated Elasticity Model Required
               </h3>
               <p className="text-xs text-amber-200/90 leading-relaxed font-medium">
-                This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.
+                {scenarioType === 'price_change' && elasticityModel && !elasticityModel.price_supported
+                  ? `Price sensitivity unsupported: ${elasticityModel.price_reason || 'Dataset lacks sufficient price variation across historical records.'}`
+                  : scenarioType === 'discount_change' && elasticityModel && !elasticityModel.discount_supported
+                  ? `Discount sensitivity unsupported: ${elasticityModel.discount_reason || 'Dataset lacks sufficient discount variation across historical records.'}`
+                  : elasticityModel?.status === 'insufficient_data'
+                  ? `Insufficient historical data: ${elasticityModel.status_message || 'Fewer than 30 observations available for elasticity modeling.'}`
+                  : 'This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.'}
               </p>
               <p className="text-xs text-slate-300 leading-relaxed">
                 Production volume forecasting models do not include econometric price elasticity or discount markdown curves.
@@ -320,6 +359,35 @@ const Simulation = () => {
         </div>
       ) : simulationResult && simulationResult.status === 'completed' ? (
         <div className="space-y-6">
+          {/* Elasticity Model Provenance Banner */}
+          {simulationResult.elasticity_model_version && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/30 text-xs shadow-md">
+              <div className="flex items-center space-x-2.5">
+                <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                <div>
+                  <span className="font-bold text-indigo-300">
+                    Dedicated Demand Elasticity Model Applied (v{simulationResult.elasticity_model_version})
+                  </span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Demand response estimated via log-log regression. Revenue reflects dynamic counterfactual effective selling price.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2.5 font-mono text-xs">
+                {simulationResult.price_elasticity !== null && simulationResult.price_elasticity !== undefined && (
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
+                    Price Elasticity: <strong className="text-emerald-400">{simulationResult.price_elasticity > 0 ? '+' : ''}{Number(simulationResult.price_elasticity).toFixed(2)}</strong>
+                  </span>
+                )}
+                {simulationResult.discount_sensitivity !== null && simulationResult.discount_sensitivity !== undefined && (
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
+                    Discount Sensitivity: <strong className="text-emerald-400">{simulationResult.discount_sensitivity > 0 ? '+' : ''}{Number(simulationResult.discount_sensitivity).toFixed(2)}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Completed Simulation View */}
           <>
             {/* KPI Cards Grid */}
