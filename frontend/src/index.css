@@ -24,3 +24,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Hide scrollbar for clean horizontal tab lists */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

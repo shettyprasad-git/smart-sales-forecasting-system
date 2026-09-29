@@ -321,6 +321,7 @@ const Products = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Add Product to Catalog"
+        maxWidth="max-w-lg"
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
           {formError && (
@@ -438,6 +439,7 @@ const Products = () => {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title={`Edit Product: ${selectedProduct?.product_id}`}
+        maxWidth="max-w-lg"
       >
         <form onSubmit={handleUpdateSubmit} className="space-y-4">
           {formError && (

@@ -32,9 +32,10 @@ class TrainingJobStatus(BaseModel):
 
 
 class ElasticityModelSummary(BaseModel):
-    status: str = Field(..., description="Status: ready, insufficient_data, unavailable, failed, none")
+    status: str = Field(..., description="Status: ready, insufficient_data, unavailable, failed, training, none")
     model_type: str = Field("RidgeLogLog", description="Model architecture")
     model_version: int | None = Field(None, description="Model iteration version")
+    dataset_id: str | None = Field(None, description="Dataset ID associated with this elasticity model")
     price_elasticity: float | None = Field(None, description="Estimated price elasticity coefficient")
     discount_sensitivity: float | None = Field(None, description="Estimated discount sensitivity coefficient")
     r2_score: float | None = Field(None, description="Validation R-squared")
@@ -43,6 +44,8 @@ class ElasticityModelSummary(BaseModel):
     training_rows: int | None = Field(None, description="Number of training observations")
     price_supported: bool = Field(False, description="Whether price change scenario is supported")
     discount_supported: bool = Field(False, description="Whether discount depth scenario is supported")
+    price_reason: str | None = Field(None, description="Reason if price sensitivity is unsupported")
+    discount_reason: str | None = Field(None, description="Reason if discount sensitivity is unsupported")
     status_message: str | None = Field(None, description="Status detail or insufficiency explanation")
     is_active: bool = Field(False, description="Whether model is currently active")
     trained_at: datetime | None = Field(None, description="Timestamp when model training completed")

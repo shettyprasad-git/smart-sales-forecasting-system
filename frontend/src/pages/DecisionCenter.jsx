@@ -241,7 +241,7 @@ const DecisionCenter = () => {
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
           title="Decision Governance Review"
-          maxWidth="max-w-4xl"
+          maxWidth="max-w-5xl"
         >
           <DecisionReviewPanel
             decision={selectedDecision}

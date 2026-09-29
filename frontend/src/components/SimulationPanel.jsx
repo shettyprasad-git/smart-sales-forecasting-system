@@ -14,8 +14,52 @@ import {
 } from 'lucide-react';
 
 export const getScenarioOptions = (elasticityModel) => {
+  const isTraining = elasticityModel?.status === 'training';
+  const isFailed = elasticityModel?.status === 'failed';
   const isPriceReady = elasticityModel?.status === 'ready' && elasticityModel?.price_supported;
   const isDiscountReady = elasticityModel?.status === 'ready' && elasticityModel?.discount_supported;
+
+  const getPriceBadge = () => {
+    if (isPriceReady) return 'Elasticity';
+    if (isTraining) return 'Training';
+    if (isFailed) return 'Failed';
+    if (elasticityModel?.status === 'insufficient_data' || elasticityModel?.status === 'unavailable') return 'Insufficient Data';
+    return 'Requires Model';
+  };
+
+  const getDiscountBadge = () => {
+    if (isDiscountReady) return 'Elasticity';
+    if (isTraining) return 'Training';
+    if (isFailed) return 'Failed';
+    if (elasticityModel?.status === 'insufficient_data' || elasticityModel?.status === 'unavailable') return 'Insufficient Data';
+    return 'Requires Model';
+  };
+
+  const getPriceDescription = () => {
+    if (isPriceReady) {
+      return `Econometric elasticity model (v${elasticityModel.model_version}, β = ${elasticityModel.price_elasticity > 0 ? '+' : ''}${Number(elasticityModel.price_elasticity).toFixed(2)}).`;
+    }
+    if (isTraining) return 'Demand sensitivity model is still training.';
+    if (isFailed) return `Demand sensitivity model training failed: ${elasticityModel.status_message || 'Internal error'}`;
+    if (elasticityModel?.price_reason) return elasticityModel.price_reason;
+    if (elasticityModel?.status === 'insufficient_data' || elasticityModel?.status === 'unavailable') {
+      return 'Price change unavailable: insufficient historical price variation.';
+    }
+    return 'Requires dedicated price-elasticity model (Not supported without trained elasticity model).';
+  };
+
+  const getDiscountDescription = () => {
+    if (isDiscountReady) {
+      return `Econometric discount sensitivity model (v${elasticityModel.model_version}, β = ${elasticityModel.discount_sensitivity > 0 ? '+' : ''}${Number(elasticityModel.discount_sensitivity).toFixed(2)}).`;
+    }
+    if (isTraining) return 'Demand sensitivity model is still training.';
+    if (isFailed) return `Demand sensitivity model training failed: ${elasticityModel.status_message || 'Internal error'}`;
+    if (elasticityModel?.discount_reason) return elasticityModel.discount_reason;
+    if (elasticityModel?.status === 'insufficient_data' || elasticityModel?.status === 'unavailable') {
+      return 'Discount depth unavailable: insufficient historical discount variation.';
+    }
+    return 'Requires dedicated discount elasticity model (Not supported without trained elasticity model).';
+  };
 
   return [
     {
@@ -63,19 +107,15 @@ export const getScenarioOptions = (elasticityModel) => {
     {
       id: 'price_change',
       name: 'Price Change',
-      description: isPriceReady
-        ? `Econometric elasticity model (v${elasticityModel.model_version}, β = ${elasticityModel.price_elasticity > 0 ? '+' : ''}${Number(elasticityModel.price_elasticity).toFixed(2)}).`
-        : 'Requires dedicated price-elasticity model (Not supported without trained elasticity model).',
-      badge: isPriceReady ? 'Elasticity' : 'Requires Model',
+      description: getPriceDescription(),
+      badge: getPriceBadge(),
       requiresModel: !isPriceReady,
     },
     {
       id: 'discount_change',
       name: 'Discount Depth',
-      description: isDiscountReady
-        ? `Econometric discount sensitivity model (v${elasticityModel.model_version}, β = ${elasticityModel.discount_sensitivity > 0 ? '+' : ''}${Number(elasticityModel.discount_sensitivity).toFixed(2)}).`
-        : 'Requires dedicated discount elasticity model (Not supported without trained elasticity model).',
-      badge: isDiscountReady ? 'Elasticity' : 'Requires Model',
+      description: getDiscountDescription(),
+      badge: getDiscountBadge(),
       requiresModel: !isDiscountReady,
     },
   ];
@@ -116,8 +156,8 @@ const SimulationPanel = ({
   const activeScenario = scenarioOptions.find((s) => s.id === scenarioType) || scenarioOptions[0];
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 sm:space-y-6 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3 sm:pb-4">
         <div className="flex items-center space-x-3">
           <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
             <Sliders className="w-5 h-5" />
@@ -179,24 +219,59 @@ const SimulationPanel = ({
       {/* Scenario Parameters Form */}
       <div className="bg-slate-950/50 border border-slate-800/80 rounded-xl p-4 space-y-4">
         {activeScenario.requiresModel ? (
-          <div className="flex items-start space-x-3.5 p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 shadow-lg">
-            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div
+            className={`flex items-start space-x-3.5 p-4 rounded-xl border shadow-lg ${
+              elasticityModel?.status === 'training'
+                ? 'bg-indigo-950/40 border-indigo-500/40 text-indigo-200'
+                : elasticityModel?.status === 'failed'
+                ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+            }`}
+          >
+            {elasticityModel?.status === 'training' ? (
+              <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0 mt-0.5" />
+            ) : elasticityModel?.status === 'failed' ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            )}
             <div className="space-y-1.5 text-xs">
-              <span className="font-bold text-sm text-amber-300 block">
-                Model Boundary Restriction: Dedicated Elasticity Model Required
+              <span
+                className={`font-bold text-sm block ${
+                  elasticityModel?.status === 'training'
+                    ? 'text-indigo-300'
+                    : elasticityModel?.status === 'failed'
+                    ? 'text-rose-300'
+                    : 'text-amber-300'
+                }`}
+              >
+                {elasticityModel?.status === 'training'
+                  ? 'Demand Sensitivity Model Training in Progress'
+                  : elasticityModel?.status === 'failed'
+                  ? 'Demand Sensitivity Model Training Failed'
+                  : 'Model Boundary Restriction: Dedicated Elasticity Model Required'}
               </span>
-              <p className="text-amber-200/90 leading-relaxed font-medium">
-                {scenarioType === 'price_change' && elasticityModel && !elasticityModel.price_supported
-                  ? `Price sensitivity unsupported: ${elasticityModel.price_reason || 'Insufficient price variation in dataset.'}`
-                  : scenarioType === 'discount_change' && elasticityModel && !elasticityModel.discount_supported
-                  ? `Discount sensitivity unsupported: ${elasticityModel.discount_reason || 'Insufficient discount variation in dataset.'}`
-                  : elasticityModel?.status === 'insufficient_data'
-                  ? `Insufficient historical data: ${elasticityModel.status_message || 'Fewer than 30 observations available for elasticity modeling.'}`
+              <p className="leading-relaxed font-medium">
+                {elasticityModel?.status === 'training'
+                  ? 'Demand sensitivity model is still training.'
+                  : elasticityModel?.status === 'failed'
+                  ? `Demand sensitivity model training failed: ${elasticityModel?.status_message || 'Internal error'}`
+                  : scenarioType === 'price_change' && elasticityModel?.price_reason
+                  ? elasticityModel.price_reason
+                  : scenarioType === 'discount_change' && elasticityModel?.discount_reason
+                  ? elasticityModel.discount_reason
+                  : elasticityModel?.status === 'insufficient_data' || elasticityModel?.status === 'unavailable'
+                  ? scenarioType === 'price_change'
+                    ? 'Price change unavailable: insufficient historical price variation.'
+                    : 'Discount depth unavailable: insufficient historical discount variation.'
                   : 'This scenario requires a dedicated elasticity model and is not supported by the current forecasting model.'}
               </p>
               <p className="text-slate-300 text-[11px] leading-relaxed">
-                The current production forecasting architecture forecasts volume from autoregressive and calendar features without explicit price sensitivity or discount depth parameters.
-                Execution is disabled to avoid ungrounded commercial projections. To enable, upload a dataset with varying unit prices and discount rates and retrain company models.
+                {elasticityModel?.status === 'training'
+                  ? 'Benchmarking and elasticity training is currently running in the background. The simulation interface will automatically unlock once the model reaches ready status.'
+                  : elasticityModel?.status === 'failed'
+                  ? 'The automated training worker encountered an error during demand sensitivity estimation. Review dataset columns (Unit_Price, Discount_Percent, Quantity) and retry.'
+                  : 'The current production forecasting architecture forecasts volume from autoregressive and calendar features without explicit price sensitivity or discount depth parameters. Execution is disabled to avoid ungrounded commercial projections. To enable, upload a dataset with varying unit prices and discount rates and retrain company models.'}
               </p>
             </div>
           </div>
@@ -490,10 +565,10 @@ const SimulationPanel = ({
       </div>
 
       {/* Action CTA */}
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
         <div className="flex items-center space-x-2 text-[11px] text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Strict zero-write simulation: historical sales records remain untouched.</span>
+          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="leading-tight">Strict zero-write simulation: historical sales records remain untouched.</span>
         </div>
         <button
           type="button"
@@ -504,7 +579,7 @@ const SimulationPanel = ({
               ? "This scenario requires a dedicated elasticity model and is not supported by the current forecasting model."
               : undefined
           }
-          className={`inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all ${
+          className={`inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all min-h-[42px] w-full sm:w-auto shrink-0 ${
             activeScenario.requiresModel
               ? 'bg-slate-800 text-slate-500 border border-slate-700/80 cursor-not-allowed opacity-60'
               : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-950/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
@@ -512,18 +587,18 @@ const SimulationPanel = ({
         >
           {loading ? (
             <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
               <span>Computing Scenario...</span>
             </>
           ) : activeScenario.requiresModel ? (
             <>
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
               <span>Simulation Restricted</span>
             </>
           ) : (
             <>
               <span>Execute Simulation</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 shrink-0" />
             </>
           )}
         </button>

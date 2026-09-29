@@ -469,6 +469,7 @@ const Sales = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Record New Sale"
+        maxWidth="max-w-lg"
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
           {formError && (
@@ -639,6 +640,7 @@ const Sales = () => {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title={`Edit Sale #${selectedSale?.id}`}
+        maxWidth="max-w-lg"
       >
         <form onSubmit={handleUpdateSubmit} className="space-y-4">
           {formError && (

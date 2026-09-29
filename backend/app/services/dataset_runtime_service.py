@@ -712,7 +712,7 @@ class DatasetRuntimeService:
                     SalesRecord.holiday_flag.label("Is_Holiday"),
                     SalesRecord.profit.label("Profit"),
                 )
-                .join(Product, SalesRecord.product_id == Product.id)
+                .outerjoin(Product, SalesRecord.product_id == Product.id)
                 .where(
                     SalesRecord.user_id == user_id,
                     SalesRecord.dataset_id == target_ds.id,
@@ -740,27 +740,33 @@ class DatasetRuntimeService:
                 )
             else:
                 prefix_to_strip = f"u{user_id}_"
-                data = [
-                    {
-                        "Date": pd.to_datetime(r.Date),
-                        "Product_ID": r.Raw_Product_ID or (
-                            r.Product_ID[len(prefix_to_strip):]
-                            if r.Product_ID.startswith(prefix_to_strip)
-                            else r.Product_ID
-                        ),
-                        "Product_Name": r.Product_Name,
-                        "Category_ID": r.Category_ID or r.Category_Name or "1",
-                        "Category_Name": r.Category_Name or "General",
-                        "Quantity": float(r.Quantity or 0.0),
-                        "Sales_Amount": float(r.Sales_Amount or 0.0),
-                        "Unit_Price": float(r.Unit_Price or 0.0),
-                        "Discount_Percent": float(r.Discount_Percent or 0.0),
-                        "Promotion": int(bool(r.Promotion)),
-                        "Is_Holiday": int(bool(r.Is_Holiday)),
-                        "Profit": float(r.Profit or 0.0),
-                    }
-                    for r in rows
-                ]
+                data = []
+                for idx, r in enumerate(rows):
+                    pid_str = str(r.Product_ID) if r.Product_ID is not None else f"item_{idx}"
+                    cleaned_pid = (
+                        r.Raw_Product_ID
+                        or (
+                            pid_str[len(prefix_to_strip):]
+                            if pid_str.startswith(prefix_to_strip)
+                            else pid_str
+                        )
+                    )
+                    data.append(
+                        {
+                            "Date": pd.to_datetime(r.Date),
+                            "Product_ID": cleaned_pid,
+                            "Product_Name": r.Product_Name or cleaned_pid,
+                            "Category_ID": r.Category_ID or r.Category_Name or "1",
+                            "Category_Name": r.Category_Name or "General",
+                            "Quantity": float(r.Quantity or 0.0),
+                            "Sales_Amount": float(r.Sales_Amount or 0.0),
+                            "Unit_Price": float(r.Unit_Price or 0.0),
+                            "Discount_Percent": float(r.Discount_Percent or 0.0),
+                            "Promotion": int(bool(r.Promotion)),
+                            "Is_Holiday": int(bool(r.Is_Holiday)),
+                            "Profit": float(r.Profit or 0.0),
+                        }
+                    )
                 df = pd.DataFrame(data).sort_values("Date").reset_index(drop=True)
 
             with self._lock:

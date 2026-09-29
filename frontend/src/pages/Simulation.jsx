@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Sliders,
   TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle2,
   BrainCircuit,
@@ -14,10 +12,8 @@ import {
   ArrowDownRight,
   Layers,
   Sparkles,
-  Calendar,
   IndianRupee,
   Activity,
-  FileText,
   ArrowRight,
 } from 'lucide-react';
 import {
@@ -27,7 +23,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
 } from 'recharts';
 
@@ -141,17 +136,27 @@ const Simulation = () => {
   const isRestrictedScenario = isPriceRestricted || isDiscountRestricted;
 
   useEffect(() => {
+    let intervalId = null;
     const fetchElasticityMetadata = async () => {
       try {
         const data = await getCurrentModelsApi();
         if (data?.elasticity_model) {
           setElasticityModel(data.elasticity_model);
+          if (data.elasticity_model.status === 'training' && !intervalId) {
+            intervalId = setInterval(fetchElasticityMetadata, 3000);
+          } else if (data.elasticity_model.status !== 'training' && intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
         }
       } catch (err) {
         console.warn('Unable to load elasticity model metadata', err);
       }
     };
     fetchElasticityMetadata();
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -534,7 +539,7 @@ const Simulation = () => {
                   </div>
                 </div>
 
-                <div className="h-80 w-full pt-2">
+                <div className="h-72 sm:h-80 w-full min-w-0 pt-2">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={simulationResult.daily_results} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />

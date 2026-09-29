@@ -83,7 +83,7 @@ const ForecastChart = ({ historical = [], forecast = [], modelName = 'ML Forecas
   const splitDate = recentHistory.length > 0 ? recentHistory[recentHistory.length - 1].date : null;
 
   return (
-    <div className="w-full h-80 pt-2">
+    <div className="w-full h-72 sm:h-80 min-w-0 pt-2">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={combinedData} margin={{ top: 10, right: 15, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />

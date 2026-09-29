@@ -71,16 +71,52 @@ def train_company_elasticity(df: pd.DataFrame | None) -> dict[str, Any]:
             "feature_columns": [],
         }
 
-    # Normalize column names (case-insensitive lookup)
-    col_map = {str(c).lower().replace(" ", "_"): c for c in df.columns}
+    # Normalize column names (case-insensitive lookup with common aliases)
+    col_map = {str(c).lower().replace(" ", "_").replace("-", "_"): c for c in df.columns}
 
-    qty_col = col_map.get("quantity")
-    price_col = col_map.get("unit_price") or col_map.get("price")
-    disc_col = col_map.get("discount_percent") or col_map.get("discount")
-    date_col = col_map.get("date")
-    promo_col = col_map.get("promotion") or col_map.get("promotions")
-    holiday_col = col_map.get("is_holiday") or col_map.get("holiday_flag")
-    cat_col = col_map.get("category_id") or col_map.get("category_name") or col_map.get("category")
+    qty_col = (
+        col_map.get("quantity")
+        or col_map.get("qty")
+        or col_map.get("units_sold")
+        or col_map.get("units")
+        or col_map.get("volume")
+    )
+    price_col = (
+        col_map.get("unit_price")
+        or col_map.get("unitprice")
+        or col_map.get("price")
+        or col_map.get("item_price")
+    )
+    disc_col = (
+        col_map.get("discount_percent")
+        or col_map.get("discount")
+        or col_map.get("discount_pct")
+        or col_map.get("discount_rate")
+    )
+    date_col = (
+        col_map.get("date")
+        or col_map.get("sale_date")
+        or col_map.get("saledate")
+        or col_map.get("order_date")
+        or col_map.get("transaction_date")
+    )
+    promo_col = (
+        col_map.get("promotion")
+        or col_map.get("promotions")
+        or col_map.get("promo")
+        or col_map.get("is_promotion")
+    )
+    holiday_col = (
+        col_map.get("is_holiday")
+        or col_map.get("holiday_flag")
+        or col_map.get("holiday")
+    )
+    cat_col = (
+        col_map.get("category_id")
+        or col_map.get("category_name")
+        or col_map.get("category")
+        or col_map.get("product_category")
+    )
 
     if not qty_col:
         return {

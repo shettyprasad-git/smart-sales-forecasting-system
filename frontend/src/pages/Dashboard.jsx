@@ -196,8 +196,7 @@ const Dashboard = () => {
         </div>
       ) : (
         <>
-          {/* Executive Financial Intelligence & Proactive Governance Section */}
-          <div className="rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/90 p-6 shadow-2xl space-y-5">
+          <div className="rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/90 p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
               <div>
                 <div className="flex items-center space-x-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
@@ -423,11 +422,11 @@ const Dashboard = () => {
           </div>
 
           {/* Forecast Demand Chart Card */}
-          <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 shadow-xl backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+          <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-4 sm:p-6 shadow-xl backdrop-blur-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3 sm:pb-4">
               <div>
                 <h3 className="text-base font-bold text-slate-100 flex items-center space-x-2">
-                  <TrendingUp className="w-4 h-4 text-indigo-400" />
+                  <TrendingUp className="w-4 h-4 text-indigo-400 shrink-0" />
                   <span>Demand Forecast & Historical Comparison</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -444,11 +443,11 @@ const Dashboard = () => {
           </div>
 
           {/* Financial Revenue & Profit Chart Card */}
-          <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 shadow-xl backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+          <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-4 sm:p-6 shadow-xl backdrop-blur-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3 sm:pb-4">
               <div>
                 <h3 className="text-base font-bold text-slate-100 flex items-center space-x-2">
-                  <IndianRupee className="w-4 h-4 text-emerald-400" />
+                  <IndianRupee className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>Historical Revenue & Profit Trend</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">

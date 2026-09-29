@@ -1,6 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Database, ShoppingCart, Package, TrendingUp, ShieldAlert, Sliders, ShieldCheck, Activity, LogOut, X, Sparkles } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Database,
+  ShoppingCart,
+  Package,
+  TrendingUp,
+  ShieldAlert,
+  Sliders,
+  ShieldCheck,
+  Activity,
+  LogOut,
+  X,
+  Sparkles,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
@@ -18,10 +31,20 @@ const navItems = [
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const { logout } = useAuth();
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && mobileOpen) {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen, setMobileOpen]);
+
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-slate-900 border-r border-slate-800 text-slate-300 w-64 select-none">
+    <div className="flex flex-col h-full bg-slate-900 border-r border-slate-800 text-slate-300 w-64 select-none pb-[max(1rem,env(safe-area-inset-bottom,0.5rem))]">
       {/* Brand Header */}
-      <div className="flex items-center justify-between h-16 px-6 border-b border-slate-800">
+      <div className="flex items-center justify-between h-16 px-6 border-b border-slate-800 shrink-0">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-gradient-to-tr from-indigo-600 to-indigo-400 rounded-xl shadow-lg shadow-indigo-950/50">
             <TrendingUp className="w-5 h-5 text-white" />
@@ -37,8 +60,10 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         </div>
         {mobileOpen && (
           <button
+            type="button"
             onClick={() => setMobileOpen(false)}
-            className="p-1 rounded-lg text-slate-400 hover:text-white lg:hidden cursor-pointer"
+            aria-label="Close navigation sidebar"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <X className="w-5 h-5" />
           </button>
@@ -46,7 +71,10 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar">
+      <nav
+        aria-label="Main Navigation"
+        className="flex-1 px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar"
+      >
         <div className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
           Main Navigation
         </div>
@@ -65,17 +93,17 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                 }`
               }
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-4 h-4 shrink-0" />
               <span>{item.name}</span>
             </NavLink>
           );
         })}
-      </div>
+      </nav>
 
       {/* System Status & Logout */}
-      <div className="p-4 border-t border-slate-800 space-y-3">
+      <div className="p-4 border-t border-slate-800 space-y-3 shrink-0">
         <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/60 flex items-center space-x-2.5">
-          <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0 animate-pulse" />
+          <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
           <div>
             <div className="text-[11px] font-semibold text-slate-200">ML Engine Ready</div>
             <div className="text-[10px] text-slate-400">Random Forest / GB / LR</div>
@@ -83,10 +111,11 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         </div>
 
         <button
+          type="button"
           onClick={logout}
           className="flex items-center space-x-3 w-full px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-rose-300 hover:bg-rose-950/30 border border-transparent hover:border-rose-900/40 transition-all cursor-pointer"
         >
-          <LogOut className="w-4 h-4 text-slate-400 group-hover:text-rose-400" />
+          <LogOut className="w-4 h-4 text-slate-400 group-hover:text-rose-400 shrink-0" />
           <span>Log Out</span>
         </button>
       </div>
@@ -100,12 +129,19 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
 
       {/* Mobile Drawer Overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation sidebar"
+          className="fixed inset-0 z-40 lg:hidden"
+        >
           <div
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs"
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-64 shadow-2xl">{sidebarContent}</div>
+          <div className="fixed inset-y-0 left-0 z-50 w-64 shadow-2xl animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </div>
         </div>
       )}
     </>

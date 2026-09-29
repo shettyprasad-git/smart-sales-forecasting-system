@@ -881,6 +881,7 @@ const Datasets = () => {
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         title="Confirm Dataset Deletion"
+        maxWidth="max-w-md"
       >
         <div className="space-y-4">
           <div className="flex items-start space-x-3 text-slate-300 text-xs">

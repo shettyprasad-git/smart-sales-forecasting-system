@@ -329,6 +329,11 @@ class CompanyModelService:
                 job.last_heartbeat_at = datetime.now(timezone.utc)
                 db.commit()
 
+                logger.info(
+                    "elasticity_training_started: user_id=%s, dataset_id=%s, job_id=%s, model_version=%s",
+                    user_id, dataset_id, job_id, model_version
+                )
+
                 product_df = dataset_runtime_service.get_product_daily(
                     user_id=user_id,
                     db=db,
@@ -338,10 +343,36 @@ class CompanyModelService:
                 elasticity_result = train_company_elasticity(product_df)
                 cem_id = f"cem-{uuid.uuid4().hex[:12]}"
                 trained_now = datetime.now(timezone.utc)
+                diag = elasticity_result.get("diagnostics") or {}
+
+                logger.info(
+                    "elasticity_data_sufficiency: user_id=%s, dataset_id=%s, rows=%s, price_unique=%s, price_std=%s, discount_unique=%s, discount_std=%s, status=%s",
+                    user_id,
+                    dataset_id,
+                    diag.get("training_rows", len(product_df)),
+                    diag.get("distinct_prices", 0),
+                    diag.get("price_std", 0.0),
+                    diag.get("distinct_discounts", 0),
+                    diag.get("discount_std", 0.0),
+                    elasticity_result.get("status"),
+                )
 
                 if elasticity_result["status"] == "ready":
+                    logger.info(
+                        "elasticity_fit_complete: user_id=%s, dataset_id=%s, price_elasticity=%s, discount_sensitivity=%s, training_rows=%s",
+                        user_id,
+                        dataset_id,
+                        elasticity_result.get("price_elasticity"),
+                        elasticity_result.get("discount_sensitivity"),
+                        elasticity_result.get("training_rows"),
+                    )
+
                     remote_path = f"models/{user_id}/{dataset_id}/v{model_version}/elasticity/model.joblib"
                     storage_service.save_artifact(remote_path, elasticity_result["artifact_bytes"])
+                    logger.info(
+                        "elasticity_artifact_saved: user_id=%s, dataset_id=%s, model_version=%s, artifact_path=%s",
+                        user_id, dataset_id, model_version, remote_path
+                    )
 
                     if dataset_is_active:
                         db.execute(
@@ -367,7 +398,7 @@ class CompanyModelService:
                         rmse=elasticity_result.get("rmse"),
                         training_rows=elasticity_result.get("training_rows"),
                         feature_version="v1",
-                        diagnostics=elasticity_result.get("diagnostics"),
+                        diagnostics=diag,
                         status="ready",
                         status_message=None,
                         is_active=dataset_is_active,
@@ -376,7 +407,23 @@ class CompanyModelService:
                     )
                     db.add(elasticity_model)
                     db.commit()
+
+                    logger.info(
+                        "elasticity_model_activated: user_id=%s, dataset_id=%s, model_id=%s, is_active=%s",
+                        user_id, dataset_id, cem_id, dataset_is_active
+                    )
+                    logger.info(
+                        "elasticity_training_succeeded: user_id=%s, dataset_id=%s, model_id=%s, model_version=%s",
+                        user_id, dataset_id, cem_id, model_version
+                    )
                 else:
+                    logger.warning(
+                        "elasticity_training_insufficient: user_id=%s, dataset_id=%s, status=%s, reason=%s",
+                        user_id,
+                        dataset_id,
+                        elasticity_result.get("status"),
+                        elasticity_result.get("status_message"),
+                    )
                     elasticity_model = CompanyElasticityModel(
                         id=cem_id,
                         user_id=user_id,
@@ -391,7 +438,7 @@ class CompanyModelService:
                         rmse=None,
                         training_rows=elasticity_result.get("training_rows"),
                         feature_version="v1",
-                        diagnostics=elasticity_result.get("diagnostics"),
+                        diagnostics=diag,
                         status=elasticity_result.get("status", "unavailable"),
                         status_message=elasticity_result.get("status_message"),
                         is_active=False,
@@ -402,10 +449,15 @@ class CompanyModelService:
                     db.commit()
 
             except Exception as e_exc:
-                logger.warning("Error training demand elasticity model for job=%s: %s", job_id, e_exc)
+                logger.exception(
+                    "elasticity_training_failed: user_id=%s, dataset_id=%s, job_id=%s, model_version=%s: %s",
+                    user_id, dataset_id, job_id, model_version, e_exc
+                )
+                db.rollback()
                 try:
                     cem_id = f"cem-{uuid.uuid4().hex[:12]}"
                     trained_now = datetime.now(timezone.utc)
+                    safe_msg = f"Demand sensitivity modeling failed: {str(e_exc)[:400]}"
                     elasticity_model = CompanyElasticityModel(
                         id=cem_id,
                         user_id=user_id,
@@ -421,16 +473,17 @@ class CompanyModelService:
                         training_rows=0,
                         feature_version="v1",
                         diagnostics={"error": str(e_exc)},
-                        status="unavailable",
-                        status_message=f"Demand sensitivity modeling failed: {e_exc}",
+                        status="failed",
+                        status_message=safe_msg,
                         is_active=False,
                         trained_at=trained_now,
                         created_at=trained_now,
                     )
                     db.add(elasticity_model)
                     db.commit()
-                except Exception:
-                    pass
+                    logger.info("elasticity_failure_record_persisted: model_id=%s, status=failed", cem_id)
+                except Exception as persist_exc:
+                    logger.exception("Could not persist failed elasticity model record: %s", persist_exc)
 
             # Completed successfully
             job.status = "ready"
@@ -675,6 +728,7 @@ class CompanyModelService:
                 "status": elasticity_record.status,
                 "model_type": elasticity_record.model_type,
                 "model_version": elasticity_record.model_version,
+                "dataset_id": elasticity_record.dataset_id,
                 "price_elasticity": elasticity_record.price_elasticity,
                 "discount_sensitivity": elasticity_record.discount_sensitivity,
                 "r2_score": elasticity_record.r2_score,
@@ -683,9 +737,31 @@ class CompanyModelService:
                 "training_rows": elasticity_record.training_rows,
                 "price_supported": bool(diag.get("price_supported", elasticity_record.price_elasticity is not None)),
                 "discount_supported": bool(diag.get("discount_supported", elasticity_record.discount_sensitivity is not None)),
+                "price_reason": diag.get("price_reason"),
+                "discount_reason": diag.get("discount_reason"),
                 "status_message": elasticity_record.status_message,
                 "is_active": elasticity_record.is_active,
                 "trained_at": elasticity_record.trained_at,
+            }
+        elif latest_job and latest_job.status in ("queued", "processing", "training", "evaluating"):
+            elasticity_summary = {
+                "status": "training",
+                "model_type": "RidgeLogLog",
+                "model_version": active_version or 1,
+                "dataset_id": active_ds.id,
+                "price_elasticity": None,
+                "discount_sensitivity": None,
+                "r2_score": None,
+                "mae": None,
+                "rmse": None,
+                "training_rows": None,
+                "price_supported": False,
+                "discount_supported": False,
+                "price_reason": "Demand sensitivity model is currently training.",
+                "discount_reason": "Demand sensitivity model is currently training.",
+                "status_message": "Demand sensitivity model is currently training.",
+                "is_active": False,
+                "trained_at": None,
             }
 
         return {

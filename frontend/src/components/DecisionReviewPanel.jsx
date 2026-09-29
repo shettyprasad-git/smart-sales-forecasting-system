@@ -99,34 +99,36 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
   const simData = decision.simulation_snapshot || decision.evidence_snapshot?.simulation;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5 md:space-y-6">
       {/* Header with Status Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-4">
-        <div>
-          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-            <span>Governance Decision Record</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+            <span>Governance Record</span>
             <span>•</span>
-            <span className="font-mono text-indigo-400">{decision.id}</span>
+            <span className="font-mono text-indigo-400 break-all">{decision.id}</span>
           </div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center space-x-3">
-            <span>{decision.recommendation_type.replace('_', ' ').toUpperCase()}</span>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-100 break-words">
+              {decision.recommendation_type.replace('_', ' ').toUpperCase()}
+            </h2>
             <span
-              className={`text-xs px-2.5 py-0.5 rounded-full font-mono uppercase font-bold border ${
+              className={`text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-mono uppercase font-bold border shrink-0 ${
                 STATUS_BADGES[decision.status] || STATUS_BADGES.pending_review
               }`}
             >
               {decision.status.replace('_', ' ')}
             </span>
-          </h2>
+          </div>
         </div>
 
-        <div className="text-xs text-slate-400 space-y-0.5 sm:text-right">
+        <div className="text-[11px] sm:text-xs text-slate-400 space-y-0.5 sm:text-right shrink-0">
           <div>
-            Created: <span className="text-slate-200">{formatDate(decision.created_at)}</span>
+            Created: <span className="text-slate-200 font-mono">{formatDate(decision.created_at)}</span>
           </div>
           {decision.reviewed_at && (
             <div>
-              Decided: <span className="text-slate-200">{formatDate(decision.reviewed_at)}</span>
+              Decided: <span className="text-slate-200 font-mono">{formatDate(decision.reviewed_at)}</span>
             </div>
           )}
         </div>
@@ -134,18 +136,18 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
 
       {/* Error Alert */}
       {error && (
-        <div className="flex items-center space-x-3 p-3.5 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-200 text-xs">
-          <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
-          <span>{error}</span>
+        <div className="flex items-start space-x-3 p-3.5 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-200 text-xs break-words">
+          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <span className="leading-relaxed">{error}</span>
         </div>
       )}
 
-      {/* Guardrail Callout */}
-      <div className="p-3.5 rounded-xl bg-indigo-950/25 border border-indigo-800/40 text-xs text-indigo-200 flex items-start space-x-3">
-        <ShieldCheck className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <span className="font-bold text-indigo-300">Human Governance Boundary</span>
-          <p className="text-indigo-200/90 leading-relaxed">
+      {/* Guardrail Callout (Governance Boundary) */}
+      <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-indigo-950/30 border border-indigo-800/40 text-xs sm:text-sm text-indigo-200 flex items-start space-x-3 shadow-sm">
+        <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+        <div className="space-y-0.5 min-w-0 flex-1">
+          <span className="font-bold text-indigo-300 block">Human Governance Boundary</span>
+          <p className="text-indigo-200/90 leading-relaxed text-xs sm:text-sm break-words">
             {decision.status === 'approved'
               ? 'Human approved — no automatic execution performed. Qualified personnel must manually enact operational decisions.'
               : decision.status === 'rejected'
@@ -157,269 +159,294 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
         </div>
       </div>
 
-      {/* Grid: Recommendation vs Human Modification */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Action Comparison: Original Proposed vs Human Modification */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Original Proposed Action */}
-        <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
-              <FileText className="w-4 h-4 text-indigo-400" />
-              <span>Original Proposed Action</span>
-            </span>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
-              Immutable
-            </span>
+        <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-2.5 flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>Original Proposed Action</span>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                Immutable
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-800 font-normal break-words whitespace-pre-wrap">
+              {decision.proposed_action}
+            </p>
           </div>
-          <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/80 p-3 rounded-xl border border-slate-800 font-normal">
-            {decision.proposed_action}
-          </p>
           {recData.title && (
-            <div className="text-[11px] text-slate-400">
-              Title: <span className="text-slate-300 font-medium">{recData.title}</span>
+            <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
+              Title: <span className="text-slate-300 font-medium break-words">{recData.title}</span>
             </div>
           )}
         </div>
 
         {/* Human Modified Action */}
-        <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
-              <User className="w-4 h-4 text-emerald-400" />
-              <span>Reviewer Modified Action</span>
-            </span>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-              Editable Wording
-            </span>
+        <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-2.5 flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+                <User className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Reviewer Modified Action</span>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                {isFinalized ? 'Recorded' : 'Editable Wording'}
+              </span>
+            </div>
+            {isFinalized ? (
+              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed bg-slate-900/80 p-3 sm:p-4 rounded-xl border border-slate-800 font-normal break-words whitespace-pre-wrap min-h-[96px]">
+                {decision.modified_action || 'No reviewer modifications were made.'}
+              </p>
+            ) : (
+              <textarea
+                rows={4}
+                value={modifiedAction}
+                onChange={(e) => setModifiedAction(e.target.value)}
+                placeholder="Refine or customize the recommendation action for human execution..."
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y min-h-[96px] leading-relaxed"
+              />
+            )}
           </div>
-          {isFinalized ? (
-            <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/80 p-3 rounded-xl border border-slate-800 font-normal">
-              {decision.modified_action || 'No reviewer modifications were made.'}
-            </p>
-          ) : (
-            <textarea
-              rows={3}
-              value={modifiedAction}
-              onChange={(e) => setModifiedAction(e.target.value)}
-              placeholder="Refine or customize the recommendation action for human execution..."
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
-            />
+          {!isFinalized && (
+            <div className="text-[10px] text-slate-400">
+              Changes here will replace the action wording for downstream execution.
+            </div>
           )}
         </div>
       </div>
 
-      {/* Anomaly & Simulation Context Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Evidence Cards: Anomaly & Simulation Context */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Empirical Anomaly Evidence */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2 border-b border-slate-800 pb-2">
-            <Layers className="w-4 h-4 text-indigo-400" />
-            <span>Anchored Anomaly Evidence</span>
-          </span>
-          {decision.anomaly_id ? (
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between text-slate-400">
-                <span>Anomaly ID:</span>
-                <span className="font-mono text-slate-200">{decision.anomaly_id}</span>
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 flex flex-col justify-between">
+          <div className="space-y-3">
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2 border-b border-slate-800 pb-2">
+              <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>Anchored Anomaly Evidence</span>
+            </span>
+            {decision.anomaly_id ? (
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Anomaly ID:</span>
+                  <span className="font-mono text-slate-200 break-all">{decision.anomaly_id}</span>
+                </div>
+                {anomData.actual !== undefined && (
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Actual vs Expected:</span>
+                    <span className="font-mono text-slate-200">
+                      {formatQuantity(anomData.actual)} vs {formatQuantity(anomData.baseline)}
+                    </span>
+                  </div>
+                )}
+                {anomData.deviation_percent !== undefined && (
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Deviation:</span>
+                    <span className="font-mono font-bold text-rose-400">
+                      {formatPercent(anomData.deviation_percent)}
+                    </span>
+                  </div>
+                )}
+                {recData.supporting_evidence?.length > 0 && (
+                  <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                    <span className="text-[11px] text-slate-400 font-semibold block">Supporting Drivers:</span>
+                    <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
+                      {recData.supporting_evidence.map((ev, i) => (
+                        <li key={i} className="break-words leading-relaxed">{ev}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              {anomData.actual !== undefined && (
-                <div className="flex justify-between text-slate-400">
-                  <span>Actual vs Expected:</span>
-                  <span className="font-mono text-slate-200">
-                    {formatQuantity(anomData.actual)} vs {formatQuantity(anomData.baseline)}
-                  </span>
-                </div>
-              )}
-              {anomData.deviation_percent !== undefined && (
-                <div className="flex justify-between text-slate-400">
-                  <span>Deviation:</span>
-                  <span className="font-mono font-bold text-rose-400">
-                    {formatPercent(anomData.deviation_percent)}
-                  </span>
-                </div>
-              )}
-              {recData.supporting_evidence?.length > 0 && (
-                <div className="pt-2 border-t border-slate-800/80 space-y-1">
-                  <span className="text-[11px] text-slate-400 font-semibold block">Supporting Drivers:</span>
-                  <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
-                    {recData.supporting_evidence.map((ev, i) => (
-                      <li key={i}>{ev}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  onClose?.();
-                  navigate('/anomalies', { state: { anomalyId: decision.anomaly_id } });
-                }}
-                className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold transition-all cursor-pointer w-full justify-center"
-              >
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Open Full Anomaly Investigation</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 italic">No direct anomaly ID anchored.</p>
+            ) : (
+              <p className="text-xs text-slate-400 italic py-2">No direct anomaly ID anchored to this record.</p>
+            )}
+          </div>
+
+          {decision.anomaly_id && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose?.();
+                navigate('/anomalies', { state: { anomalyId: decision.anomaly_id } });
+              }}
+              className="mt-3 inline-flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer w-full shrink-0"
+            >
+              <Layers className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Open Full Anomaly Investigation</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           )}
         </div>
 
-        {/* Associated What-If Simulation */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
-          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2 border-b border-slate-800 pb-2">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
-            <span>What-If Simulation Evidence</span>
-          </span>
-          {simData ? (
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between text-slate-400">
-                <span>Scenario:</span>
-                <span className="font-semibold text-slate-200">
-                  {simData.scenario_type?.replace('_', ' ').toUpperCase()} ({simData.horizon_days}d)
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Volume Variance:</span>
-                <span className="font-mono font-bold text-emerald-400">
-                  {simData.quantity_delta > 0 ? `+${formatQuantity(simData.quantity_delta)}` : formatQuantity(simData.quantity_delta)}
-                </span>
-              </div>
-              {simData.revenue_delta !== null && simData.revenue_delta !== undefined && (
-                <div className="flex justify-between text-slate-400">
-                  <span>Revenue Variance:</span>
-                  <span className="font-mono text-sky-400">
-                    {simData.revenue_delta > 0 ? `+${formatCurrency(simData.revenue_delta)}` : formatCurrency(simData.revenue_delta)}
+        {/* Associated What-If Simulation Evidence */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 flex flex-col justify-between">
+          <div className="space-y-3">
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2 border-b border-slate-800 pb-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>What-If Simulation Evidence</span>
+            </span>
+            {simData ? (
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Scenario:</span>
+                  <span className="font-semibold text-slate-200">
+                    {simData.scenario_type?.replace('_', ' ').toUpperCase()} ({simData.horizon_days}d)
                   </span>
                 </div>
-              )}
-              {simData.assumptions?.length > 0 && (
-                <div className="pt-2 border-t border-slate-800/80 space-y-1">
-                  <span className="text-[11px] text-slate-400 font-semibold block">Simulation Assumptions:</span>
-                  <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
-                    {simData.assumptions.slice(0, 2).map((a, i) => (
-                      <li key={i}>{a}</li>
-                    ))}
-                  </ul>
+                <div className="flex justify-between items-center text-slate-400">
+                  <span>Volume Variance:</span>
+                  <span className="font-mono font-bold text-emerald-400">
+                    {simData.quantity_delta > 0 ? `+${formatQuantity(simData.quantity_delta)}` : formatQuantity(simData.quantity_delta)}
+                  </span>
                 </div>
-              )}
+                {simData.revenue_delta !== null && simData.revenue_delta !== undefined && (
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Revenue Variance:</span>
+                    <span className="font-mono text-sky-400 font-semibold">
+                      {simData.revenue_delta > 0 ? `+${formatCurrency(simData.revenue_delta)}` : formatCurrency(simData.revenue_delta)}
+                    </span>
+                  </div>
+                )}
+                {simData.assumptions?.length > 0 && (
+                  <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                    <span className="text-[11px] text-slate-400 font-semibold block">Simulation Assumptions:</span>
+                    <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
+                      {simData.assumptions.slice(0, 2).map((a, i) => (
+                        <li key={i} className="break-words leading-relaxed">{a}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2 py-2">
+                <p className="text-xs text-slate-400 italic">No what-if simulation attached to this decision.</p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            {simData ? (
               <button
                 type="button"
                 onClick={() => {
                   onClose?.();
                   navigate(decision.anomaly_id ? `/simulation?anomaly_id=${decision.anomaly_id}` : '/simulation');
                 }}
-                className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition-all cursor-pointer w-full justify-center"
+                className="mt-3 inline-flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-all cursor-pointer w-full shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Open in What-If Simulator</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-slate-400 italic">No what-if simulation attached to this decision.</p>
-              {decision.anomaly_id && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose?.();
-                    navigate(`/simulation?anomaly_id=${decision.anomaly_id}`);
-                  }}
-                  className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition-all cursor-pointer w-full justify-center"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Simulate This Anomaly</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          )}
+            ) : decision.anomaly_id ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose?.();
+                  navigate(`/simulation?anomaly_id=${decision.anomaly_id}`);
+                }}
+                className="mt-2 inline-flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-all cursor-pointer w-full shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Simulate This Anomaly</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {/* Reviewer Note / Rationale Input (if active) */}
       {!isFinalized && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-2">
           <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
             Reviewer Decision Note / Rationale {isPending ? '(Required for Reject / Changes)' : ''}
           </label>
           <textarea
-            rows={2}
+            rows={3}
             value={decisionNote}
             onChange={(e) => setDecisionNote(e.target.value)}
             placeholder="Record executive rationale, business context, or revision feedback..."
-            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
+            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y min-h-[72px] leading-relaxed"
           />
         </div>
       )}
 
       {/* Decision Note Display (if finalized) */}
       {isFinalized && decision.rationale && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-1.5">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
             Decision Rationale Recorded:
           </span>
-          <p className="text-xs text-slate-200 font-medium italic bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+          <p className="text-xs sm:text-sm text-slate-200 font-medium italic bg-slate-950/60 p-3 sm:p-4 rounded-xl border border-slate-800 break-words leading-relaxed">
             "{decision.rationale}"
           </p>
         </div>
       )}
 
-      {/* Decision Action Buttons */}
+      {/* Responsive Decision Action Buttons */}
       {!isFinalized && (
-        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+        <div className="pt-2">
           {isPending && (
-            <>
-              <button
-                type="button"
-                onClick={() => handleActionClick('reject')}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 text-xs font-bold transition-all cursor-pointer"
-              >
-                <XCircle className="w-4 h-4" />
-                <span>Reject</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleActionClick('request_changes')}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 border border-sky-800/60 text-xs font-bold transition-all cursor-pointer"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Request Changes</span>
-              </button>
-
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2.5 sm:gap-3">
+              {/* Primary action first on mobile (order-1), rightmost on desktop (sm:order-3) */}
               <button
                 type="button"
                 onClick={() => handleActionClick('approve')}
-                className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+                className="order-1 sm:order-3 inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-950/40 transition-all cursor-pointer min-h-[42px] w-full sm:w-auto"
               >
-                <CheckCircle2 className="w-4 h-4" />
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Approve for Human Execution</span>
               </button>
-            </>
+
+              {/* Secondary action: Request Changes */}
+              <button
+                type="button"
+                onClick={() => handleActionClick('request_changes')}
+                className="order-2 sm:order-2 inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 border border-sky-800/60 text-xs sm:text-sm font-bold transition-all cursor-pointer min-h-[42px] w-full sm:w-auto"
+              >
+                <RotateCcw className="w-4 h-4 shrink-0" />
+                <span>Request Changes</span>
+              </button>
+
+              {/* Reject action: bottom on mobile (order-3), leftmost on desktop (sm:order-1) */}
+              <button
+                type="button"
+                onClick={() => handleActionClick('reject')}
+                className="order-3 sm:order-1 inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 text-xs sm:text-sm font-bold transition-all cursor-pointer min-h-[42px] w-full sm:w-auto"
+              >
+                <XCircle className="w-4 h-4 shrink-0" />
+                <span>Reject</span>
+              </button>
+            </div>
           )}
 
           {isChangesRequested && (
-            <button
-              type="button"
-              onClick={() => handleActionClick('resubmit')}
-              className="inline-flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-950/40 transition-all cursor-pointer"
-            >
-              <Send className="w-4 h-4" />
-              <span>Resubmit for Review</span>
-            </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2.5 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => handleActionClick('resubmit')}
+                className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-950/40 transition-all cursor-pointer min-h-[42px] w-full sm:w-auto"
+              >
+                <Send className="w-4 h-4 shrink-0" />
+                <span>Resubmit for Review</span>
+              </button>
+            </div>
           )}
         </div>
       )}
 
       {/* Confirmation Modal */}
       {showConfirm && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center space-x-3">
               <div
-                className={`p-2.5 rounded-xl border ${
+                className={`p-2.5 rounded-xl border shrink-0 ${
                   actionType === 'approve'
                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                     : actionType === 'reject'
@@ -440,7 +467,7 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
               </h3>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed break-words">
               {actionType === 'approve' &&
                 'Approval records your executive decision and does NOT automatically execute any business action, order, or price adjustment. Are you sure you want to approve this recommendation?'}
               {actionType === 'reject' &&
@@ -451,12 +478,12 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
                 'Resubmit this revised recommendation for review? Status will return to pending review.'}
             </p>
 
-            <div className="flex items-center justify-end space-x-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowConfirm(false)}
                 disabled={loading}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+                className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer w-full sm:w-auto"
               >
                 Cancel
               </button>
@@ -464,7 +491,7 @@ const DecisionReviewPanel = ({ decision, onDecisionUpdated, onClose }) => {
                 type="button"
                 onClick={handleConfirmSubmit}
                 disabled={loading}
-                className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer ${
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white transition-all cursor-pointer w-full sm:w-auto ${
                   actionType === 'approve'
                     ? 'bg-emerald-600 hover:bg-emerald-500'
                     : actionType === 'reject'

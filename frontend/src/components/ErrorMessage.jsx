@@ -11,8 +11,8 @@ const ErrorMessage = ({
       <div className="flex items-start space-x-3">
         <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
-          <h4 className="text-sm font-semibold text-rose-300">{title}</h4>
-          <p className="text-xs text-rose-200/80 mt-1 leading-relaxed">{message}</p>
+          <h4 className="text-sm font-semibold text-rose-300 break-words">{title}</h4>
+          <p className="text-xs text-rose-200/80 mt-1 leading-relaxed break-words">{message}</p>
           {onRetry && (
             <button
               onClick={onRetry}

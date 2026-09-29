@@ -36,8 +36,8 @@ const KpiCard = ({ title, value, icon: Icon, description, color = 'indigo' }) =>
         </div>
       </div>
 
-      <div className="space-y-1">
-        <div className="text-2xl font-bold tracking-tight text-slate-100 font-mono">
+      <div className="space-y-1 min-w-0">
+        <div className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 font-mono truncate">
           {value}
         </div>
         {description && (

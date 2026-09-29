@@ -294,28 +294,54 @@ class SimulationService:
 
         # 1. Handle Elasticity Scenarios: price_change and discount_change
         elasticity_model: Any = None
+        elasticity_payload: dict[str, Any] | None = None
+
         if request.scenario_type in (ScenarioType.PRICE_CHANGE, ScenarioType.DISCOUNT_CHANGE):
             elasticity_model = self._get_active_elasticity_model(user_id=user_id, db=db)
             if not elasticity_model:
-                # Check if there is an inactive/insufficient model in DB to provide the precise diagnostic reason
+                logger.warning(
+                    "elasticity_model_missing: user_id=%s, scenario_type=%s",
+                    user_id,
+                    request.scenario_type.value,
+                )
+                # Check if there is an in-flight training job or an inactive/failed/insufficient model in DB
                 if db is not None and user_id is not None:
                     try:
                         from sqlalchemy import select
-                        from backend.app.database.models import CompanyElasticityModel
+                        from backend.app.database.models import CompanyElasticityModel, ModelTrainingJob
+
+                        # Check if a training job is actively in-flight
+                        active_job = db.scalars(
+                            select(ModelTrainingJob)
+                            .where(
+                                ModelTrainingJob.user_id == user_id,
+                                ModelTrainingJob.status.in_(("queued", "processing", "training", "evaluating")),
+                            )
+                            .order_by(ModelTrainingJob.created_at.desc())
+                        ).first()
+                        if active_job:
+                            raise UnsupportedScenarioError(
+                                "Demand sensitivity model is currently training. Please wait for training to complete."
+                            )
 
                         latest_model = db.scalars(
                             select(CompanyElasticityModel)
                             .where(CompanyElasticityModel.user_id == user_id)
                             .order_by(CompanyElasticityModel.created_at.desc())
                         ).first()
-                        if latest_model and latest_model.status in ("unavailable", "insufficient_data"):
-                            diag = latest_model.diagnostics or {}
-                            if request.scenario_type == ScenarioType.PRICE_CHANGE and diag.get("price_reason"):
-                                raise UnsupportedScenarioError(diag["price_reason"])
-                            if request.scenario_type == ScenarioType.DISCOUNT_CHANGE and diag.get("discount_reason"):
-                                raise UnsupportedScenarioError(diag["discount_reason"])
-                            if latest_model.status_message:
-                                raise UnsupportedScenarioError(latest_model.status_message)
+                        if latest_model:
+                            if latest_model.status == "failed":
+                                raise UnsupportedScenarioError(
+                                    f"Demand sensitivity model training failed: {latest_model.status_message or 'Internal error'}"
+                                )
+                            if latest_model.status in ("unavailable", "insufficient_data"):
+                                diag = latest_model.diagnostics or {}
+                                if request.scenario_type == ScenarioType.PRICE_CHANGE and diag.get("price_reason"):
+                                    raise UnsupportedScenarioError(diag["price_reason"])
+                                if request.scenario_type == ScenarioType.DISCOUNT_CHANGE and diag.get("discount_reason"):
+                                    raise UnsupportedScenarioError(diag["discount_reason"])
+                                if latest_model.status_message:
+                                    raise UnsupportedScenarioError(latest_model.status_message)
                     except UnsupportedScenarioError:
                         raise
                     except Exception:
@@ -339,6 +365,27 @@ class SimulationService:
                     raise UnsupportedScenarioError(
                         diag.get("discount_reason")
                         or "Discount Depth is unavailable because the active dataset does not contain sufficient historical discount variation to estimate discount sensitivity."
+                    )
+
+            # Load artifact from persistent storage (Phase 6, Phase 12)
+            artifact_path = getattr(elasticity_model, "artifact_path", None)
+            if artifact_path:
+                try:
+                    import joblib
+                    from backend.app.services.storage_service import storage_service
+                    artifact_file = storage_service.load_artifact_file(artifact_path)
+                    elasticity_payload = joblib.load(artifact_file)
+                    logger.info(
+                        "elasticity_model_resolved: user_id=%s, dataset_id=%s, model_version=%s, artifact_path=%s",
+                        user_id,
+                        getattr(elasticity_model, "dataset_id", None),
+                        getattr(elasticity_model, "model_version", None),
+                        artifact_path,
+                    )
+                except Exception as load_exc:
+                    logger.warning(
+                        "Could not load elasticity artifact from storage (%s): %s. Using database registry metadata.",
+                        artifact_path, load_exc
                     )
 
 

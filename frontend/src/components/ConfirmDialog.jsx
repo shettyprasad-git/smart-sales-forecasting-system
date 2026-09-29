@@ -12,19 +12,19 @@ const ConfirmDialog = ({
   loading = false,
 }) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth="max-w-md">
       <div className="space-y-4">
         <div className="flex items-start space-x-3 text-amber-400 p-3 bg-amber-950/20 border border-amber-500/20 rounded-xl">
           <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-amber-200/90 leading-relaxed">{message}</p>
         </div>
 
-        <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-4 border-t border-slate-800">
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 text-xs font-medium rounded-lg text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+            className="px-4 py-2.5 text-xs font-medium rounded-xl text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50 w-full sm:w-auto text-center"
           >
             Cancel
           </button>
@@ -32,9 +32,9 @@ const ConfirmDialog = ({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-medium rounded-lg bg-rose-600 hover:bg-rose-500 text-white transition-colors cursor-pointer shadow-lg shadow-rose-950/50 disabled:opacity-50"
+            className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 text-xs font-medium rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-colors cursor-pointer shadow-lg shadow-rose-950/50 disabled:opacity-50 w-full sm:w-auto"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
             <span>{confirmText}</span>
           </button>
         </div>
