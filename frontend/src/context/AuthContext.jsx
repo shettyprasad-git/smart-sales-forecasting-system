@@ -5,30 +5,42 @@ import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from '../utils/constants';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY));
   const [user, setUser] = useState(() => {
+    const savedToken = localStorage.getItem(AUTH_TOKEN_KEY);
     const savedUser = localStorage.getItem(AUTH_USER_KEY);
+    if (!savedToken) {
+      localStorage.removeItem(AUTH_USER_KEY);
+      return null;
+    }
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-      if (storedToken) {
-        try {
-          const meData = await getMeApi();
-          setUser(meData);
-          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(meData));
-        } catch {
-          // Token invalid or expired
-          localStorage.removeItem(AUTH_TOKEN_KEY);
-          localStorage.removeItem(AUTH_USER_KEY);
-          setToken(null);
-          setUser(null);
-        }
+      if (!storedToken) {
+        localStorage.removeItem(AUTH_USER_KEY);
+        setToken(null);
+        setUser(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        const meData = await getMeApi();
+        setUser(meData);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(meData));
+      } catch {
+        // Token invalid or expired
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
     initAuth();
@@ -54,6 +66,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
+    sessionStorage.removeItem('auth_notice');
     setToken(null);
     setUser(null);
   };

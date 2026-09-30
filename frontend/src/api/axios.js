@@ -16,8 +16,39 @@ apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      if (config.headers?.set) {
+        config.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
     }
+
+    // For multipart/form-data (FormData payload):
+    // Do NOT manually force Content-Type: multipart/form-data without boundary.
+    // Allow Axios and the browser to set Content-Type with the correct boundary parameter.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      if (config.headers?.delete) {
+        config.headers.delete('Content-Type');
+      } else if (config.headers) {
+        delete config.headers['Content-Type'];
+        delete config.headers['content-type'];
+      }
+    }
+
+    // Safe debugging telemetry (never log actual JWT, password, or refresh token)
+    const hasAuth = !!(
+      config.headers?.Authorization ||
+      config.headers?.['Authorization'] ||
+      (config.headers?.get && config.headers.get('Authorization'))
+    );
+    if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH) {
+      console.debug(
+        `[apiClient] ${config.method?.toUpperCase()} ${config.url} auth_header_present=${hasAuth}`
+      );
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -30,14 +61,46 @@ export const extractErrorMessage = (error) => {
   if (error.response) {
     const { status, data } = error.response;
 
+    // 401: Expired or invalid token
+    if (status === 401) {
+      return 'Your session has expired. Please sign in again.';
+    }
+
+    // 403: Forbidden
+    if (status === 403) {
+      if (data && data.detail && typeof data.detail === 'string') {
+        return data.detail;
+      }
+      return 'You do not have permission.';
+    }
+
+    // 409: Conflict
+    if (status === 409) {
+      if (data && data.detail) {
+        return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+      }
+      return 'A record with this identifier already exists.';
+    }
+
+    // 422: Validation response
     if (status === 422 && data?.detail) {
       if (Array.isArray(data.detail)) {
         const messages = data.detail.map(
           (err) => `${err.loc ? err.loc.join(' -> ') + ': ' : ''}${err.msg}`
         );
-        return messages.join(' | ') || 'Invalid form input provided.';
+        return messages.join(' | ') || 'Validation error occurred.';
       }
       return typeof data.detail === 'string' ? data.detail : 'Validation error occurred.';
+    }
+
+    // 500: Internal server error
+    if (status === 500) {
+      return 'The backend encountered an internal error.';
+    }
+
+    // 502 / 503: Gateway / Service unavailable
+    if (status === 502 || status === 503) {
+      return 'Backend service temporarily unavailable.';
     }
 
     if (data && data.detail) {
@@ -47,23 +110,16 @@ export const extractErrorMessage = (error) => {
     switch (status) {
       case 400:
         return 'Bad request. Please check your request parameters.';
-      case 401:
-        return 'Session expired or invalid credentials. Please log in again.';
-      case 403:
-        return 'You do not have permission to perform this action.';
       case 404:
         return 'The requested resource was not found.';
-      case 409:
-        return 'A record with this identifier already exists.';
-      case 500:
-        return 'Internal server error. Please check backend service.';
       default:
         return `Request failed with status code ${status}.`;
     }
   }
 
+  // Network failure (no response received from backend)
   if (error.request) {
-    return `Unable to connect to the backend server. Please verify the API service is reachable at ${baseURL}.`;
+    return 'Unable to reach the backend server.';
   }
 
   return error.message || 'An unknown error occurred.';
@@ -78,10 +134,13 @@ apiClient.interceptors.response.use(
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_USER_KEY);
 
+      // Store notice for login screen
+      sessionStorage.setItem('auth_notice', 'Your session has expired. Please sign in again.');
+
       // Avoid redirect loops if already on login/register
       const currentPath = window.location.pathname;
       if (currentPath !== '/login' && currentPath !== '/register') {
-        window.location.href = '/login';
+        window.location.href = '/login?expired=1';
       }
     }
     return Promise.reject(error);

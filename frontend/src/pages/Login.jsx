@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -61,6 +61,15 @@ const Login = () => {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const notice = sessionStorage.getItem('auth_notice');
+    const searchParams = new URLSearchParams(window.location.search);
+    if (notice || searchParams.get('expired')) {
+      setError(notice || 'Your session has expired. Please sign in again.');
+      sessionStorage.removeItem('auth_notice');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

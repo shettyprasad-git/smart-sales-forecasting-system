@@ -13,9 +13,6 @@ import {
   ArrowRight,
   ShieldCheck,
   Info,
-  Calendar,
-  Layers,
-  Package,
   Cpu,
 } from 'lucide-react';
 import {
@@ -27,10 +24,10 @@ import {
 } from '../api/datasets';
 import { getCurrentModelsApi, trainDatasetModelsApi } from '../api/models';
 import { extractErrorMessage } from '../api/axios';
-import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import Modal from '../components/Modal';
 import { formatDate, formatNumber } from '../utils/formatters';
+import { AUTH_TOKEN_KEY } from '../utils/constants';
 
 const STATUS_BADGES = {
   active: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
@@ -70,6 +67,24 @@ const Datasets = () => {
         getDatasetHistoryApi(),
         getCurrentModelsApi(),
       ]);
+
+      // Check if any critical request failed with 401 Unauthorized
+      const unauthErr = [currentRes, historyRes, modelsRes].find(
+        (r) => r.status === 'rejected' && r.reason?.response?.status === 401
+      );
+      if (unauthErr) {
+        setError('Your session has expired. Please sign in again.');
+        return;
+      }
+
+      // Check if all requests failed with a network error
+      const allNetworkErr = [currentRes, historyRes, modelsRes].every(
+        (r) => r.status === 'rejected' && r.reason?.request && !r.reason?.response
+      );
+      if (allNetworkErr) {
+        setError('Unable to reach the backend server.');
+        return;
+      }
 
       if (currentRes.status === 'fulfilled') {
         setCurrentDataset(currentRes.value);
@@ -116,7 +131,7 @@ const Datasets = () => {
       try {
         const updated = await getCurrentModelsApi();
         setModelsData(updated);
-      } catch (e) {
+      } catch {
         // silent polling catch
       }
     }, 3000);
@@ -127,6 +142,12 @@ const Datasets = () => {
   const handleRetrain = async () => {
     const targetId = currentDataset?.dataset_id || currentDataset?.id;
     if (!targetId) return;
+
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      setError('Your session has expired. Please sign in again.');
+      return;
+    }
 
     try {
       setRetrainLoading(true);
@@ -188,6 +209,12 @@ const Datasets = () => {
   const handleUpload = async () => {
     if (!selectedFile) return;
 
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      setError('Your session has expired. Please sign in again.');
+      return;
+    }
+
     try {
       setActionLoading(true);
       setError(null);
@@ -224,6 +251,12 @@ const Datasets = () => {
   };
 
   const handleActivate = async (datasetId) => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      setError('Your session has expired. Please sign in again.');
+      return;
+    }
+
     try {
       setActionLoading(true);
       setError(null);
@@ -246,16 +279,35 @@ const Datasets = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
 
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) {
+      setError('Your session has expired. Please sign in again.');
+      setDeleteModalOpen(false);
+      return;
+    }
+
     try {
       setActionLoading(true);
       setError(null);
       await deleteDatasetApi(deleteTarget.id);
       setDeleteModalOpen(false);
       setDeleteTarget(null);
-      setSuccessMessage('Dataset and its sales records deleted.');
+      setSuccessMessage('Dataset deleted successfully.');
       await loadData();
     } catch (err) {
-      setError(extractErrorMessage(err));
+      const msg = extractErrorMessage(err);
+      if (err.response?.status === 409) {
+        if (msg.toLowerCase().includes('training')) {
+          setError('Dataset deletion is temporarily unavailable while model training is running.');
+        } else if (msg.toLowerCase().includes('activate another') || msg.toLowerCase().includes('active')) {
+          setError(msg || 'Activate another dataset before deleting the current active dataset.');
+        } else {
+          setError(msg);
+        }
+      } else {
+        setError(msg);
+      }
+      setDeleteModalOpen(false);
     } finally {
       setActionLoading(false);
     }
@@ -879,8 +931,8 @@ const Datasets = () => {
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
-        title="Confirm Dataset Deletion"
+        onClose={() => !actionLoading && setDeleteModalOpen(false)}
+        title="Delete dataset?"
         maxWidth="max-w-md"
       >
         <div className="space-y-4">
@@ -888,24 +940,31 @@ const Datasets = () => {
             <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
             <p>
               Are you sure you want to permanently delete{' '}
-              <strong className="text-slate-100">{deleteTarget?.original_filename}</strong>? All associated
-              sales records ({formatNumber(deleteTarget?.row_count || 0)} rows) will be permanently deleted from Supabase PostgreSQL.
+              <strong className="text-slate-100">{deleteTarget?.original_filename}</strong>? This permanently removes this dataset and its associated tenant data and model artifacts. Shared product catalog records are preserved.
             </p>
           </div>
 
           <div className="flex justify-end space-x-3 pt-4 border-t border-slate-800">
             <button
               onClick={() => setDeleteModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
+              disabled={actionLoading}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={actionLoading}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-all cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-all cursor-pointer flex items-center space-x-1.5 disabled:opacity-50"
             >
-              {actionLoading ? 'Deleting...' : 'Delete Dataset'}
+              {actionLoading ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <span>Delete Dataset</span>
+              )}
             </button>
           </div>
         </div>

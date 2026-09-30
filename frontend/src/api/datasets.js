@@ -1,14 +1,21 @@
 import apiClient from './axios';
+import { AUTH_TOKEN_KEY } from '../utils/constants';
 
 /**
  * Upload a sales CSV dataset.
  * Expects a FormData object containing 'file'.
+ * Never manually force Content-Type: multipart/form-data so the browser
+ * can generate the correct multipart boundary. Ensure Authorization header is attached.
  */
 export const uploadDatasetApi = async (formData, onUploadProgress) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await apiClient.post('/api/datasets/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    headers,
     onUploadProgress,
   });
   return response.data;
