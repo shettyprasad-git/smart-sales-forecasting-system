@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.config import settings
-from backend.app.database.models import DatasetUpload, Product, SalesRecord, User
+from backend.app.database.models import DatasetUpload, ModelTrainingJob, Product, SalesRecord, User
 from backend.app.services.dataset_runtime_service import dataset_runtime_service, NoActiveDatasetError
 
 
@@ -176,6 +176,10 @@ def test_upload_success_and_lifecycle(client: TestClient, db_session):
     assert cur_res2.status_code == 200
     assert cur_res2.json()["dataset_id"] == d1_id
 
+    # Mark background training job completed before deleting to satisfy training safety check
+    db_session.query(ModelTrainingJob).filter(ModelTrainingJob.dataset_id == d2_id).update({"status": "completed"})
+    db_session.commit()
+
     # Delete Dataset 2
     del_res = client.delete(f"/api/datasets/{d2_id}", headers=headers)
     assert del_res.status_code == 200
@@ -279,8 +283,14 @@ def test_legacy_sales_records_preserved(client: TestClient, db_session):
     assert check_legacy is not None
     assert check_legacy.dataset_id is None
 
+    # Archive the uploaded dataset and mark training job completed before deleting
+    db_session.query(DatasetUpload).filter(DatasetUpload.id == dataset_id).update({"status": "archived"})
+    db_session.query(ModelTrainingJob).filter(ModelTrainingJob.dataset_id == dataset_id).update({"status": "completed"})
+    db_session.commit()
+
     # Delete the uploaded dataset
-    client.delete(f"/api/datasets/{dataset_id}", headers=headers)
+    del_res = client.delete(f"/api/datasets/{dataset_id}", headers=headers)
+    assert del_res.status_code == 200
 
     # Legacy sale is still intact!
     check_legacy2 = db_session.query(SalesRecord).filter(SalesRecord.id == legacy_id).first()

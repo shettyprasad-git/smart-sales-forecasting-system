@@ -256,6 +256,12 @@ class DatasetUpload(Base):
         cascade="all, delete-orphan",
     )
 
+    training_jobs: Mapped[list["ModelTrainingJob"]] = relationship(
+        "ModelTrainingJob",
+        back_populates="dataset",
+        cascade="all, delete-orphan",
+    )
+
 
 
 class SalesRecord(Base):
@@ -1069,6 +1075,6 @@ class ModelTrainingJob(Base):
     )
 
     user: Mapped["User"] = relationship("User")
-    dataset: Mapped["DatasetUpload"] = relationship("DatasetUpload")
+    dataset: Mapped["DatasetUpload"] = relationship("DatasetUpload", back_populates="training_jobs")
 
 

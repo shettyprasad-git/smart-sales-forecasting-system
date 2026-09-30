@@ -606,3 +606,6 @@ class MonitoringService:
             .all()
         )
         return [MonitoringRunItemResponse.model_validate(r) for r in runs]
+
+
+monitoring_service = MonitoringService()

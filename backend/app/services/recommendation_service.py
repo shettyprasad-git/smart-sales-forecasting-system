@@ -1029,3 +1029,6 @@ class RecommendationService:
             self._cache.pop(anomaly_id, None)
         else:
             self._cache.clear()
+
+
+recommendation_service = RecommendationService()

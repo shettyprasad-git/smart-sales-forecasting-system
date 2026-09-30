@@ -366,3 +366,14 @@ def delete_dataset_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    except DatasetConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.error("Failed to delete dataset %s: %s", dataset_id, exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete dataset safely due to an internal error.",
+        ) from exc

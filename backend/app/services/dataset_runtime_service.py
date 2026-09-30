@@ -19,7 +19,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
-from backend.app.database.models import DatasetUpload, Product, SalesRecord, User
+from backend.app.database.models import (
+    CompanyElasticityModel,
+    CompanyModel,
+    DatasetUpload,
+    ModelTrainingJob,
+    Product,
+    SalesRecord,
+    User,
+)
 from backend.app.schemas.datasets import DatasetSummaryResponse
 
 logger = logging.getLogger(__name__)
@@ -561,8 +569,14 @@ class DatasetRuntimeService:
     def delete_dataset(self, db: Session, user_id: int, dataset_id: str) -> None:
         """
         Delete dataset belonging to user_id.
-        Cascades delete only to its linked sales records.
-        Preserves shared products and legacy sales.
+        Verifies:
+        1. Authenticated tenant ownership (404 if not found).
+        2. No model training job actively running for this dataset (returns 409 if in-flight).
+        3. Active dataset protection: cannot delete current active dataset without replacement (returns 409).
+        4. Atomic deletion of tenant-owned child records (company elasticity models, company forecast models,
+           training jobs, and sales records). Shared Product rows are strictly preserved.
+        5. Atomic commit and cache invalidation.
+        6. Storage cleanup of associated private model artifacts (models/{user_id}/{dataset_id}/...).
         """
         target = db.scalars(
             select(DatasetUpload).where(
@@ -574,9 +588,167 @@ class DatasetRuntimeService:
         if not target:
             raise KeyError(f"Dataset '{dataset_id}' not found for current user.")
 
-        db.delete(target)
-        db.commit()
+        # 1. Training Job Safety Check: Prevent deletion while training is actively running
+        from backend.app.services.company_model_service import training_lock_manager
+        from backend.app.services.storage_service import storage_service
+
+        active_job = db.scalars(
+            select(ModelTrainingJob).where(
+                ModelTrainingJob.dataset_id == dataset_id,
+                ModelTrainingJob.user_id == user_id,
+                ModelTrainingJob.status.in_(["queued", "processing", "training", "evaluating"]),
+            )
+        ).first()
+
+        if active_job or training_lock_manager.is_locked(user_id, dataset_id):
+            logger.warning(
+                "dataset_deletion_blocked_training_active: user_id=%s, dataset_id=%s, job_id=%s, status=%s",
+                user_id,
+                dataset_id,
+                active_job.id if active_job else "lock",
+                active_job.status if active_job else "locked",
+            )
+            raise DatasetConflictError("Dataset cannot be deleted while model training is in progress.")
+
+        # 2. Active Dataset Protection:
+        if target.status == "active":
+            # Check if user has another dataset available
+            other_dataset = db.scalars(
+                select(DatasetUpload).where(
+                    DatasetUpload.user_id == user_id,
+                    DatasetUpload.id != dataset_id,
+                )
+            ).first()
+
+            if not other_dataset:
+                raise DatasetConflictError(
+                    "No active replacement dataset is available. Activate another dataset before deleting the current active dataset."
+                )
+            else:
+                raise DatasetConflictError(
+                    "Activate another dataset before deleting the current active dataset."
+                )
+
+        # 3. Collect model artifact paths for post-commit storage cleanup
+        artifact_paths: set[str] = set()
+        try:
+            cm_paths = db.scalars(
+                select(CompanyModel.artifact_path).where(
+                    CompanyModel.dataset_id == dataset_id,
+                    CompanyModel.user_id == user_id,
+                )
+            ).all()
+            for p in cm_paths:
+                if p:
+                    artifact_paths.add(p)
+
+            cem_paths = db.scalars(
+                select(CompanyElasticityModel.artifact_path).where(
+                    CompanyElasticityModel.dataset_id == dataset_id,
+                    CompanyElasticityModel.user_id == user_id,
+                )
+            ).all()
+            for p in cem_paths:
+                if p:
+                    artifact_paths.add(p)
+        except Exception as exc:
+            logger.warning("Could not query artifact paths before deletion: %s", exc)
+
+        # Also add conventional paths for this user and dataset across potential versions
+        for v in range(1, 10):
+            for h in [7, 30, 90]:
+                artifact_paths.add(f"models/{user_id}/{dataset_id}/v{v}/{h}d/model.joblib")
+            artifact_paths.add(f"models/{user_id}/{dataset_id}/v{v}/elasticity/model.joblib")
+
+        # 4. Atomic Database Deletion
+        try:
+            # Delete dependent records in explicit dependency order
+            db.execute(
+                delete(CompanyElasticityModel).where(
+                    CompanyElasticityModel.dataset_id == dataset_id,
+                    CompanyElasticityModel.user_id == user_id,
+                )
+            )
+            db.execute(
+                delete(CompanyModel).where(
+                    CompanyModel.dataset_id == dataset_id,
+                    CompanyModel.user_id == user_id,
+                )
+            )
+            db.execute(
+                delete(ModelTrainingJob).where(
+                    ModelTrainingJob.dataset_id == dataset_id,
+                    ModelTrainingJob.user_id == user_id,
+                )
+            )
+            db.execute(
+                delete(SalesRecord).where(
+                    SalesRecord.dataset_id == dataset_id,
+                    SalesRecord.user_id == user_id,
+                )
+            )
+            db.delete(target)
+            db.commit()
+            logger.info("dataset_deleted_successfully: user_id=%s, dataset_id=%s", user_id, dataset_id)
+        except IntegrityError as exc:
+            db.rollback()
+            err_str = str(exc.orig) if hasattr(exc, "orig") else str(exc)
+            table_name = "dependent records"
+            if "model_training_jobs" in err_str:
+                table_name = "model_training_jobs"
+            elif "company_models" in err_str:
+                table_name = "company_models"
+            elif "company_elasticity_models" in err_str:
+                table_name = "company_elasticity_models"
+            elif "sales_records" in err_str:
+                table_name = "sales_records"
+            logger.error("Database foreign-key integrity error during dataset deletion: %s", exc)
+            raise DatasetConflictError(
+                f"Dataset cannot be deleted because table {table_name} still contains dependent records."
+            ) from exc
+        except Exception as exc:
+            db.rollback()
+            logger.exception("Unexpected database error during dataset deletion: %s", exc)
+            raise
+
+        # 5. Invalidate caches across services
         self.invalidate_cache(user_id)
+        try:
+            from backend.app.services.monitoring_service import monitoring_service
+            monitoring_service.clear_cache(user_id)
+        except Exception:
+            pass
+
+        try:
+            from backend.app.services.recommendation_service import recommendation_service
+            recommendation_service.clear_cache()
+        except Exception:
+            pass
+
+        try:
+            from backend.app.services.simulation_service import _SIMULATION_CACHE
+            _SIMULATION_CACHE.clear()
+        except Exception:
+            pass
+
+        try:
+            training_lock_manager.release(user_id, dataset_id)
+        except Exception:
+            pass
+
+        # 6. Post-commit storage artifact cleanup
+        for path in artifact_paths:
+            try:
+                storage_service.delete_artifact(path)
+                logger.info("Deleted artifact %s for user_id=%s, dataset_id=%s", path, user_id, dataset_id)
+            except Exception as exc:
+                logger.warning(
+                    "Orphaned artifact cleanup failed for path=%s (user_id=%s, dataset_id=%s): %s",
+                    path,
+                    user_id,
+                    dataset_id,
+                    exc,
+                )
 
     def get_daily_aggregate(
         self,
