@@ -4,6 +4,8 @@ import io
 import logging
 import os
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 import tempfile
 import urllib.error
@@ -15,6 +17,105 @@ from backend.app.core.config import settings
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+class StorageCleanupResult(str, Enum):
+    """Classification of an object storage cleanup attempt."""
+    DELETED = "deleted"                  # 200 / 204: Object successfully deleted
+    ALREADY_ABSENT = "already_absent"    # 404, or 400 with 'not found': Object already gone
+    INVALID_PATH = "invalid_path"        # Malformed path, traversal attempt, or non-model path
+    PERMISSION_DENIED = "permission_denied"  # 401 / 403: Authorization or RLS failure
+    TRANSIENT_ERROR = "transient_error"  # 5xx, timeouts, connection dropouts
+
+
+@dataclass(frozen=True)
+class DeleteResult:
+    """Result metadata for an artifact deletion operation."""
+    path: str
+    result: StorageCleanupResult
+    status_code: int | None = None
+    message: str | None = None
+
+    @property
+    def is_success_or_benign(self) -> bool:
+        return self.result in (StorageCleanupResult.DELETED, StorageCleanupResult.ALREADY_ABSENT)
+
+
+def validate_artifact_path(path: str) -> bool:
+    """
+    Validate that an artifact path adheres strictly to internal model storage conventions
+    and contains no path traversal ('..') or dangerous characters.
+
+    Expected format: models/{user_id}/{dataset_id}/v{version}/{horizon_or_type}/model.joblib
+    """
+    if not path or not isinstance(path, str):
+        return False
+    clean = path.strip().lstrip("/\\")
+    if not clean:
+        return False
+    parts = clean.replace("\\", "/").split("/")
+    if any(p in ("", ".", "..") for p in parts):
+        return False
+    if parts[0] != "models":
+        return False
+    if len(parts) < 5 or len(parts) > 7:
+        return False
+    filename = parts[-1]
+    if not (filename.endswith(".joblib") or filename.endswith(".json")):
+        return False
+    return True
+
+
+def build_model_artifact_path(
+    user_id: int | str,
+    dataset_id: str,
+    model_version: int | str,
+    horizon_or_type: int | str,
+) -> str:
+    """
+    Build canonical storage path for a model artifact.
+    Example: models/1/ds-xyz/v1/7/model.joblib or models/1/ds-xyz/v1/elasticity/model.joblib
+    """
+    v_clean = str(model_version).lstrip("v")
+    h_clean = str(horizon_or_type)
+    return f"models/{user_id}/{dataset_id}/v{v_clean}/{h_clean}/model.joblib"
+
+
+def classify_supabase_storage_error(status_code: int, err_body: str = "") -> StorageCleanupResult:
+    """
+    Classify Supabase Storage HTTP error status code and response body
+    into a structured domain cleanup result.
+    """
+    body_lower = (err_body or "").lower()
+
+    # 1. Check for absent object indicators
+    # Supabase Storage returns 404, or 400 with 'not found' / 'resource was not found' when an object is absent
+    absent_indicators = [
+        "not found",
+        "resource was not found",
+        "resource not found",
+        "object not found",
+        "not_found",
+        "nosuchkey",
+        "does not exist",
+        "no such file",
+    ]
+    if status_code == 404:
+        return StorageCleanupResult.ALREADY_ABSENT
+
+    if status_code == 400:
+        if any(ind in body_lower for ind in absent_indicators):
+            return StorageCleanupResult.ALREADY_ABSENT
+        # Any other 400 is NOT classified as absent; it remains an actionable failure.
+        return StorageCleanupResult.INVALID_PATH
+
+    if status_code in (401, 403) or "unauthorized" in body_lower or "forbidden" in body_lower or "jwt" in body_lower:
+        return StorageCleanupResult.PERMISSION_DENIED
+
+    if status_code >= 500:
+        return StorageCleanupResult.TRANSIENT_ERROR
+
+    return StorageCleanupResult.TRANSIENT_ERROR
 
 
 class StorageError(Exception):
@@ -51,8 +152,8 @@ class StorageBackend(ABC):
         pass
 
     @abstractmethod
-    def delete(self, remote_path: str) -> None:
-        """Delete object at remote path if present."""
+    def delete(self, remote_path: str) -> DeleteResult:
+        """Delete object at remote path if present and return DeleteResult."""
         pass
 
 
@@ -94,13 +195,37 @@ class LocalStorageBackend(StorageBackend):
     def exists(self, remote_path: str) -> bool:
         return self._resolve(remote_path).exists()
 
-    def delete(self, remote_path: str) -> None:
-        target = self._resolve(remote_path)
-        if target.exists():
-            try:
-                target.unlink()
-            except OSError as exc:
-                logger.warning("Failed to delete local artifact %s: %s", target, exc)
+    def delete(self, remote_path: str) -> DeleteResult:
+        clean_path = remote_path.strip().lstrip("/\\") if remote_path else ""
+        if not validate_artifact_path(clean_path):
+            logger.warning("local_storage_cleanup_invalid_path: path=%s", clean_path)
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.INVALID_PATH,
+                message="Path failed artifact validation constraints",
+            )
+        target = self._resolve(clean_path)
+        if not target.exists():
+            logger.info("local_storage_cleanup_already_absent: path=%s", clean_path)
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.ALREADY_ABSENT,
+            )
+        try:
+            target.unlink()
+            logger.info("local_storage_cleanup_success: path=%s", clean_path)
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.DELETED,
+                status_code=200,
+            )
+        except OSError as exc:
+            logger.warning("local_storage_cleanup_failed: path=%s, error=%s", clean_path, exc)
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.TRANSIENT_ERROR,
+                message=str(exc),
+            )
 
 
 class SupabaseStorageBackend(StorageBackend):
@@ -213,8 +338,20 @@ class SupabaseStorageBackend(StorageBackend):
         except Exception:
             return False
 
-    def delete(self, remote_path: str) -> None:
-        clean_path = remote_path.lstrip("/\\")
+    def delete(self, remote_path: str) -> DeleteResult:
+        clean_path = remote_path.strip().lstrip("/\\") if remote_path else ""
+        if not validate_artifact_path(clean_path):
+            logger.warning(
+                "storage_cleanup_invalid_path: bucket=%s, path=%s",
+                self.bucket,
+                clean_path,
+            )
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.INVALID_PATH,
+                message="Path failed artifact validation constraints",
+            )
+
         url = f"{self.supabase_url}/storage/v1/object/{self.bucket}/{clean_path}"
         headers = {
             "apikey": self.supabase_key,
@@ -222,10 +359,82 @@ class SupabaseStorageBackend(StorageBackend):
         }
         req = urllib.request.Request(url, headers=headers, method="DELETE")
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                pass
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                status = getattr(resp, "status", 200)
+                logger.info(
+                    "storage_cleanup_success: bucket=%s, path=%s, status=%s",
+                    self.bucket,
+                    clean_path,
+                    status,
+                )
+                return DeleteResult(
+                    path=clean_path,
+                    result=StorageCleanupResult.DELETED,
+                    status_code=status,
+                )
+        except urllib.error.HTTPError as exc:
+            err_body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            classified = classify_supabase_storage_error(exc.code, err_body)
+
+            if classified == StorageCleanupResult.ALREADY_ABSENT:
+                logger.info(
+                    "storage_cleanup_already_absent: bucket=%s, path=%s, status=%s",
+                    self.bucket,
+                    clean_path,
+                    exc.code,
+                )
+            elif classified == StorageCleanupResult.PERMISSION_DENIED:
+                logger.error(
+                    "storage_cleanup_permission_denied: bucket=%s, path=%s, status=%s",
+                    self.bucket,
+                    clean_path,
+                    exc.code,
+                )
+            elif classified == StorageCleanupResult.INVALID_PATH:
+                logger.warning(
+                    "storage_cleanup_rejected_by_storage: bucket=%s, path=%s, status=%s",
+                    self.bucket,
+                    clean_path,
+                    exc.code,
+                )
+            else:
+                logger.warning(
+                    "storage_cleanup_transient_http_error: bucket=%s, path=%s, status=%s",
+                    self.bucket,
+                    clean_path,
+                    exc.code,
+                )
+
+            return DeleteResult(
+                path=clean_path,
+                result=classified,
+                status_code=exc.code,
+                message=err_body[:200],
+            )
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            logger.warning(
+                "storage_cleanup_network_error: bucket=%s, path=%s, error=%s",
+                self.bucket,
+                clean_path,
+                type(exc).__name__,
+            )
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.TRANSIENT_ERROR,
+                message=f"{type(exc).__name__}: {str(exc)}",
+            )
         except Exception as exc:
-            logger.warning("Failed to delete remote Supabase object %s: %s", clean_path, exc)
+            logger.warning(
+                "storage_cleanup_unexpected_error: bucket=%s, path=%s, error=%s",
+                self.bucket,
+                clean_path,
+                type(exc).__name__,
+            )
+            return DeleteResult(
+                path=clean_path,
+                result=StorageCleanupResult.TRANSIENT_ERROR,
+                message=str(exc),
+            )
 
 
 class ModelStorageService:
@@ -310,15 +519,17 @@ class ModelStorageService:
 
         return local_path
 
-    def delete_artifact(self, remote_path: str) -> None:
+    def delete_artifact(self, remote_path: str) -> DeleteResult:
         """Purge from container cache and delete from remote storage."""
-        local_path = self.get_local_cached_path(remote_path)
-        if local_path.exists():
-            try:
-                local_path.unlink()
-            except OSError:
-                pass
-        self.backend.delete(remote_path)
+        clean = remote_path.strip().lstrip("/\\") if remote_path else ""
+        if clean:
+            local_path = self.get_local_cached_path(clean)
+            if local_path.exists():
+                try:
+                    local_path.unlink()
+                except OSError:
+                    pass
+        return self.backend.delete(remote_path)
 
 
 storage_service = ModelStorageService()

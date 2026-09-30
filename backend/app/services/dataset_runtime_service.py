@@ -631,34 +631,67 @@ class DatasetRuntimeService:
 
         # 3. Collect model artifact paths for post-commit storage cleanup
         artifact_paths: set[str] = set()
+        observed_versions: set[int] = set()
         try:
-            cm_paths = db.scalars(
-                select(CompanyModel.artifact_path).where(
+            from backend.app.services.storage_service import (
+                build_model_artifact_path,
+                validate_artifact_path,
+                StorageCleanupResult,
+            )
+
+            cm_records = db.execute(
+                select(CompanyModel.artifact_path, CompanyModel.model_version).where(
                     CompanyModel.dataset_id == dataset_id,
                     CompanyModel.user_id == user_id,
                 )
             ).all()
-            for p in cm_paths:
-                if p:
-                    artifact_paths.add(p)
+            for path, ver in cm_records:
+                if path and path.strip() and validate_artifact_path(path.strip()):
+                    artifact_paths.add(path.strip())
+                if ver is not None:
+                    try:
+                        observed_versions.add(int(ver))
+                    except (ValueError, TypeError):
+                        pass
 
-            cem_paths = db.scalars(
-                select(CompanyElasticityModel.artifact_path).where(
+            cem_records = db.execute(
+                select(CompanyElasticityModel.artifact_path, CompanyElasticityModel.model_version).where(
                     CompanyElasticityModel.dataset_id == dataset_id,
                     CompanyElasticityModel.user_id == user_id,
                 )
             ).all()
-            for p in cem_paths:
-                if p:
-                    artifact_paths.add(p)
-        except Exception as exc:
-            logger.warning("Could not query artifact paths before deletion: %s", exc)
+            for path, ver in cem_records:
+                if path and path.strip() and validate_artifact_path(path.strip()):
+                    artifact_paths.add(path.strip())
+                if ver is not None:
+                    try:
+                        observed_versions.add(int(ver))
+                    except (ValueError, TypeError):
+                        pass
 
-        # Also add conventional paths for this user and dataset across potential versions
-        for v in range(1, 10):
+            job_versions = db.scalars(
+                select(ModelTrainingJob.model_version).where(
+                    ModelTrainingJob.dataset_id == dataset_id,
+                    ModelTrainingJob.user_id == user_id,
+                )
+            ).all()
+            for jv in job_versions:
+                if jv is not None:
+                    try:
+                        observed_versions.add(int(jv))
+                    except (ValueError, TypeError):
+                        pass
+        except Exception as exc:
+            logger.warning("Could not query model artifact paths before deletion: %s", exc)
+
+        # For any versions actually observed for this dataset, add canonical paths
+        # matching upload paths exactly:
+        # models/{user_id}/{dataset_id}/v{version}/{horizon}/model.joblib (horizon in [7, 30, 90])
+        # models/{user_id}/{dataset_id}/v{version}/elasticity/model.joblib
+        for v in observed_versions:
             for h in [7, 30, 90]:
-                artifact_paths.add(f"models/{user_id}/{dataset_id}/v{v}/{h}d/model.joblib")
-            artifact_paths.add(f"models/{user_id}/{dataset_id}/v{v}/elasticity/model.joblib")
+                artifact_paths.add(build_model_artifact_path(user_id, dataset_id, v, h))
+            artifact_paths.add(build_model_artifact_path(user_id, dataset_id, v, "elasticity"))
 
         # 4. Atomic Database Deletion
         try:
@@ -737,18 +770,35 @@ class DatasetRuntimeService:
             pass
 
         # 6. Post-commit storage artifact cleanup
+        cleaned_count = 0
+        absent_count = 0
+        error_count = 0
+
         for path in artifact_paths:
             try:
-                storage_service.delete_artifact(path)
-                logger.info("Deleted artifact %s for user_id=%s, dataset_id=%s", path, user_id, dataset_id)
+                res = storage_service.delete_artifact(path)
+                if res.result == StorageCleanupResult.DELETED:
+                    cleaned_count += 1
+                elif res.result == StorageCleanupResult.ALREADY_ABSENT:
+                    absent_count += 1
+                else:
+                    error_count += 1
             except Exception as exc:
+                error_count += 1
                 logger.warning(
-                    "Orphaned artifact cleanup failed for path=%s (user_id=%s, dataset_id=%s): %s",
+                    "Unexpected error during artifact cleanup for path=%s: %s",
                     path,
-                    user_id,
-                    dataset_id,
                     exc,
                 )
+
+        logger.info(
+            "dataset_storage_cleanup_summary: user_id=%s, dataset_id=%s, deleted=%s, already_absent=%s, failed=%s",
+            user_id,
+            dataset_id,
+            cleaned_count,
+            absent_count,
+            error_count,
+        )
 
     def get_daily_aggregate(
         self,
