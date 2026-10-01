@@ -1,0 +1,443 @@
+{
+  "config": {
+    "max_acf_lags": 35,
+    "max_pacf_lags": 35,
+    "seasonal_period": 7,
+    "rolling_window": 7,
+    "significance_level": 0.05,
+    "min_required_observations": 28,
+    "skewness_log_threshold": 1.0,
+    "generate_plots": true,
+    "plots_output_dir": "C:\\Users\\prasa\\Prasad Shetty\\Project\\Smart Sales Forecasting System\\ml\\artifacts\\time_series_diagnostics"
+  },
+  "profile": {
+    "start_date": "2018-01-29",
+    "end_date": "2025-12-31",
+    "observations": 2894,
+    "mean": 4947.9167,
+    "median": 4897.5,
+    "std": 728.8519,
+    "min": 3481.0,
+    "max": 7664.0,
+    "zero_demand_days": 0,
+    "missing_values": 0,
+    "coefficient_of_variation": 0.1473
+  },
+  "trend": {
+    "trend_slope": 0.584288,
+    "trend_intercept": 4102.7442,
+    "r_squared": 0.4487,
+    "first_half_mean": 4491.2232,
+    "second_half_mean": 5404.6102,
+    "percentage_change": 0.2034
+  },
+  "stationarity": {
+    "test_statistic": -2.4688,
+    "p_value": 0.1232,
+    "used_lag": 28,
+    "number_of_observations": 2865,
+    "critical_values": {
+      "1%": -3.4326,
+      "5%": -2.8625,
+      "10%": -2.5673
+    },
+    "stationarity_assessment": "non_stationary_at_5_percent"
+  },
+  "differencing": {
+    "original_series": {
+      "test_statistic": -2.4688,
+      "p_value": 0.1232,
+      "used_lag": 28,
+      "number_of_observations": 2865,
+      "critical_values": {
+        "1%": -3.4326,
+        "5%": -2.8625,
+        "10%": -2.5673
+      },
+      "stationarity_assessment": "non_stationary_at_5_percent"
+    },
+    "first_difference": {
+      "test_statistic": -12.0519,
+      "p_value": 0.0,
+      "used_lag": 28,
+      "number_of_observations": 2864,
+      "critical_values": {
+        "1%": -3.4326,
+        "5%": -2.8625,
+        "10%": -2.5673
+      },
+      "stationarity_assessment": "stationary_at_5_percent"
+    },
+    "seasonal_difference_7d": {
+      "test_statistic": -11.0638,
+      "p_value": 0.0,
+      "used_lag": 28,
+      "number_of_observations": 2858,
+      "critical_values": {
+        "1%": -3.4326,
+        "5%": -2.8626,
+        "10%": -2.5673
+      },
+      "stationarity_assessment": "stationary_at_5_percent"
+    },
+    "first_difference_changed_stationarity": true
+  },
+  "autocorrelation": {
+    "lag_1": 0.886654,
+    "lag_7": 0.885004,
+    "lag_14": 0.862507,
+    "lag_21": 0.848102,
+    "lag_28": 0.834838,
+    "acf_values": [
+      {
+        "lag": 1,
+        "acf": 0.886654
+      },
+      {
+        "lag": 2,
+        "acf": 0.783608
+      },
+      {
+        "lag": 3,
+        "acf": 0.768588
+      },
+      {
+        "lag": 4,
+        "acf": 0.753904
+      },
+      {
+        "lag": 5,
+        "acf": 0.737191
+      },
+      {
+        "lag": 6,
+        "acf": 0.810863
+      },
+      {
+        "lag": 7,
+        "acf": 0.885004
+      },
+      {
+        "lag": 8,
+        "acf": 0.792613
+      },
+      {
+        "lag": 9,
+        "acf": 0.699064
+      },
+      {
+        "lag": 10,
+        "acf": 0.694944
+      },
+      {
+        "lag": 11,
+        "acf": 0.689622
+      },
+      {
+        "lag": 12,
+        "acf": 0.68824
+      },
+      {
+        "lag": 13,
+        "acf": 0.775111
+      },
+      {
+        "lag": 14,
+        "acf": 0.862507
+      },
+      {
+        "lag": 15,
+        "acf": 0.769887
+      },
+      {
+        "lag": 16,
+        "acf": 0.680267
+      },
+      {
+        "lag": 17,
+        "acf": 0.678488
+      },
+      {
+        "lag": 18,
+        "acf": 0.676337
+      },
+      {
+        "lag": 19,
+        "acf": 0.675498
+      },
+      {
+        "lag": 20,
+        "acf": 0.76134
+      },
+      {
+        "lag": 21,
+        "acf": 0.848102
+      },
+      {
+        "lag": 22,
+        "acf": 0.757125
+      },
+      {
+        "lag": 23,
+        "acf": 0.66756
+      },
+      {
+        "lag": 24,
+        "acf": 0.665624
+      },
+      {
+        "lag": 25,
+        "acf": 0.6658
+      },
+      {
+        "lag": 26,
+        "acf": 0.662725
+      },
+      {
+        "lag": 27,
+        "acf": 0.748102
+      },
+      {
+        "lag": 28,
+        "acf": 0.834838
+      },
+      {
+        "lag": 29,
+        "acf": 0.743857
+      },
+      {
+        "lag": 30,
+        "acf": 0.651958
+      },
+      {
+        "lag": 31,
+        "acf": 0.649015
+      },
+      {
+        "lag": 32,
+        "acf": 0.64749
+      },
+      {
+        "lag": 33,
+        "acf": 0.642875
+      },
+      {
+        "lag": 34,
+        "acf": 0.728843
+      },
+      {
+        "lag": 35,
+        "acf": 0.814695
+      }
+    ]
+  },
+  "partial_autocorrelation": {
+    "max_evaluated_lag": 35,
+    "lag_1": 0.886688,
+    "lag_7": 0.312395,
+    "pacf_values": [
+      {
+        "lag": 1,
+        "pacf": 0.886688
+      },
+      {
+        "lag": 2,
+        "pacf": -0.011572
+      },
+      {
+        "lag": 3,
+        "pacf": 0.357345
+      },
+      {
+        "lag": 4,
+        "pacf": 0.028132
+      },
+      {
+        "lag": 5,
+        "pacf": 0.155981
+      },
+      {
+        "lag": 6,
+        "pacf": 0.523427
+      },
+      {
+        "lag": 7,
+        "pacf": 0.312395
+      },
+      {
+        "lag": 8,
+        "pacf": -0.512604
+      },
+      {
+        "lag": 9,
+        "pacf": -0.08566
+      },
+      {
+        "lag": 10,
+        "pacf": 0.135358
+      },
+      {
+        "lag": 11,
+        "pacf": 0.084022
+      },
+      {
+        "lag": 12,
+        "pacf": 0.175793
+      },
+      {
+        "lag": 13,
+        "pacf": 0.219043
+      },
+      {
+        "lag": 14,
+        "pacf": 0.236389
+      },
+      {
+        "lag": 15,
+        "pacf": -0.408724
+      },
+      {
+        "lag": 16,
+        "pacf": -0.025572
+      },
+      {
+        "lag": 17,
+        "pacf": 0.08639
+      },
+      {
+        "lag": 18,
+        "pacf": 0.098849
+      },
+      {
+        "lag": 19,
+        "pacf": 0.108249
+      },
+      {
+        "lag": 20,
+        "pacf": 0.08163
+      },
+      {
+        "lag": 21,
+        "pacf": 0.153768
+      },
+      {
+        "lag": 22,
+        "pacf": -0.275021
+      },
+      {
+        "lag": 23,
+        "pacf": -0.016278
+      },
+      {
+        "lag": 24,
+        "pacf": 0.054654
+      },
+      {
+        "lag": 25,
+        "pacf": 0.131275
+      },
+      {
+        "lag": 26,
+        "pacf": -0.007413
+      },
+      {
+        "lag": 27,
+        "pacf": 0.049861
+      },
+      {
+        "lag": 28,
+        "pacf": 0.121062
+      },
+      {
+        "lag": 29,
+        "pacf": -0.200855
+      },
+      {
+        "lag": 30,
+        "pacf": -0.05136
+      },
+      {
+        "lag": 31,
+        "pacf": 0.034883
+      },
+      {
+        "lag": 32,
+        "pacf": 0.091193
+      },
+      {
+        "lag": 33,
+        "pacf": -0.04179
+      },
+      {
+        "lag": 34,
+        "pacf": 0.086794
+      },
+      {
+        "lag": 35,
+        "pacf": 0.082984
+      }
+    ]
+  },
+  "seasonality": {
+    "seasonal_period": 7,
+    "lag_7_acf": 0.885004,
+    "lag_14_acf": 0.862507,
+    "lag_21_acf": 0.848102,
+    "lag_28_acf": 0.834838,
+    "seasonal_strength_7d": 0.8248,
+    "has_monthly_cycle_candidate": true,
+    "monthly_lag_30_acf": 0.651958,
+    "has_annual_cycle_candidate": true,
+    "annual_lag_364_acf": 0.719992,
+    "notes": [
+      "Candidate monthly cyclical pattern detected at lag 30 (ACF: 0.652).",
+      "Candidate annual cyclical pattern detected at lag 364 (ACF: 0.720)."
+    ]
+  },
+  "rolling_statistics": {
+    "window": 7,
+    "mean_rolling_std": 307.8419,
+    "max_rolling_std": 924.5261,
+    "min_rolling_std": 138.2558,
+    "rolling_std_ratio": 6.6871,
+    "variance_signal": "changing_variance_indicated"
+  },
+  "variance_transformation": {
+    "skewness": 0.4035,
+    "kurtosis": -0.19,
+    "has_zero_demand": false,
+    "recommendation": "no_transform_indication",
+    "recommendation_threshold": "skewness > 1.0 and min >= 0.0 (use log1p if zeros are present)"
+  },
+  "outlier_summary": {
+    "q1": 4395.25,
+    "q3": 5435.75,
+    "iqr": 1040.5,
+    "lower_bound": 2834.5,
+    "upper_bound": 6996.5,
+    "iqr_outlier_count": 10,
+    "iqr_outlier_ratio": 0.0035,
+    "extreme_max_ratio": 1.5649,
+    "extreme_min_ratio": 0.7108
+  },
+  "sufficiency": {
+    "observations": 2894,
+    "minimum_required_observations": 28,
+    "sufficient_for_diagnostics": true,
+    "sufficient_for_seasonal_7d": true,
+    "sufficient_for_annual_seasonal": true
+  },
+  "conclusion": {
+    "stationarity": "non_stationary_at_5_percent",
+    "trend": "upward_linear_trend",
+    "weekly_autocorrelation": "strong_weekly_autocorrelation",
+    "differencing_signal": "first_differencing_recommended",
+    "variance_signal": "changing_variance_indicated",
+    "observation_sufficiency": "sufficient_for_classical_modelling"
+  },
+  "plot_artifacts": [
+    "C:\\Users\\prasa\\Prasad Shetty\\Project\\Smart Sales Forecasting System\\ml\\artifacts\\time_series_diagnostics\\original_and_rolling.png",
+    "C:\\Users\\prasa\\Prasad Shetty\\Project\\Smart Sales Forecasting System\\ml\\artifacts\\time_series_diagnostics\\acf_pacf.png",
+    "C:\\Users\\prasa\\Prasad Shetty\\Project\\Smart Sales Forecasting System\\ml\\artifacts\\time_series_diagnostics\\differenced_series.png"
+  ]
+}
