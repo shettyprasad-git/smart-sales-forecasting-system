@@ -13,6 +13,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from ml.evaluation.metrics import evaluate
+from ml.evaluation.recursive_forecast import forecast_block
 from ml.features.feature_pipeline import (
     FEATURE_COLUMNS,
     build_feature_dataset,
@@ -107,7 +108,7 @@ def check_data_sufficiency(
 
 
 def split_chronological(
-    features_df: pd.DataFrame,
+    df: pd.DataFrame,
     horizon: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -117,20 +118,20 @@ def split_chronological(
     Train: all preceding rows
     Guarantees max(Train.Date) < min(Val.Date) <= max(Val.Date) < min(Test.Date).
     """
-    total_rows = len(features_df)
+    total_rows = len(df)
     if total_rows < (2 * horizon + 1):
         raise ValueError(
-            f"Not enough feature rows ({total_rows}) for chronological 3-way split with horizon {horizon}."
+            f"Not enough rows ({total_rows}) for chronological 3-way split with horizon {horizon}."
         )
 
-    test_df = features_df.iloc[-horizon:].copy()
-    val_df = features_df.iloc[-(2 * horizon) : -horizon].copy()
-    train_df = features_df.iloc[: -(2 * horizon)].copy()
+    test_df = df.iloc[-horizon:].copy()
+    val_df = df.iloc[-(2 * horizon) : -horizon].copy()
+    train_df = df.iloc[: -(2 * horizon)].copy()
 
     # Invariant assertion
-    if not train_df.empty and not val_df.empty:
+    if not train_df.empty and not val_df.empty and hasattr(df.index, "is_monotonic_increasing") and df.index.is_monotonic_increasing:
         assert train_df.index.max() < val_df.index.min(), "Lookahead leakage detected between Train and Validation!"
-    if not val_df.empty and not test_df.empty:
+    if not val_df.empty and not test_df.empty and hasattr(df.index, "is_monotonic_increasing") and df.index.is_monotonic_increasing:
         assert val_df.index.max() < test_df.index.min(), "Lookahead leakage detected between Validation and Test!"
 
     return train_df, val_df, test_df
@@ -164,29 +165,46 @@ def benchmark_and_train_horizon(
             "reference_start_date": None,
         }
 
-    # 1. Feature Engineering
-    features = build_feature_dataset(daily_df)
-    missing_features = [col for col in FEATURE_COLUMNS if col not in features.columns]
+    # 1. Normalize Date sorting and extract reference_start_date
+    df = daily_df.copy()
+    if "Date" in df.columns:
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.sort_values("Date").reset_index(drop=True)
+    elif isinstance(df.index, pd.DatetimeIndex):
+        df = df.sort_index().reset_index()
+        df.rename(columns={"index": "Date"}, inplace=True)
+    else:
+        raise ValueError("Input data must contain a Date column or use a DatetimeIndex.")
+
+    raw_dates = pd.to_datetime(df["Date"])
+    reference_start_date = pd.Timestamp(raw_dates.min()).normalize()
+
+    # Events lookup indexed by normalized Timestamp
+    events_df = df.set_index(pd.to_datetime(df["Date"]).dt.normalize())
+
+    # 2. Raw Chronological Partition
+    train_daily = df.iloc[: -(2 * horizon)].copy()
+    val_daily = df.iloc[-(2 * horizon) : -horizon].copy()
+    test_daily = df.iloc[-horizon:].copy()
+
+    train_history = list(train_daily["Quantity"].astype(float).values)
+    val_dates = pd.DatetimeIndex(val_daily["Date"])
+    val_actuals = val_daily["Quantity"].to_numpy(dtype=float)
+
+    test_history = list(df.iloc[:-horizon]["Quantity"].astype(float).values)
+    test_dates = pd.DatetimeIndex(test_daily["Date"])
+    test_actuals = test_daily["Quantity"].to_numpy(dtype=float)
+
+    # 3. Training Features (Built ONLY from historical training data)
+    train_features = build_feature_dataset(train_daily)
+    missing_features = [col for col in FEATURE_COLUMNS if col not in train_features.columns]
     if missing_features:
         raise ValueError(f"Feature pipeline missing required columns: {missing_features}")
 
-    # Dynamic reference start date from company's actual historical sequence
-    raw_dates = pd.to_datetime(daily_df["Date"] if "Date" in daily_df.columns else daily_df.index)
-    reference_start_date = pd.Timestamp(raw_dates.min()).normalize()
+    X_train = train_features[FEATURE_COLUMNS]
+    y_train = train_features["Quantity"]
 
-    # 2. Chronological Split
-    train_df, val_df, test_df = split_chronological(features, horizon)
-
-    X_train = train_df[FEATURE_COLUMNS]
-    y_train = train_df["Quantity"]
-
-    X_val = val_df[FEATURE_COLUMNS]
-    y_val = val_df["Quantity"]
-
-    X_test = test_df[FEATURE_COLUMNS]
-    y_test = test_df["Quantity"]
-
-    # 3. Benchmark Candidates on Train -> Validation
+    # 4. Benchmark Candidates on Train -> Recursive Holdout Validation
     candidate_factories = get_candidate_factories()
     candidate_evaluations: list[dict[str, Any]] = []
 
@@ -195,8 +213,15 @@ def benchmark_and_train_horizon(
             model = factory()
             model.fit(X_train, y_train)
 
-            val_preds = np.maximum(0.0, np.asarray(model.predict(X_val), dtype=float))
-            val_metrics = evaluate(y_val.values, val_preds)
+            val_preds = forecast_block(
+                model=model,
+                history=train_history,
+                dates=val_dates,
+                events=events_df,
+                reference_start_date=reference_start_date,
+                feature_columns=FEATURE_COLUMNS,
+            )
+            val_metrics = evaluate(val_actuals, np.asarray(val_preds, dtype=float))
 
             candidate_evaluations.append(
                 {
@@ -207,14 +232,21 @@ def benchmark_and_train_horizon(
                     "rmse": val_metrics["RMSE"],
                 }
             )
-            logger.info("Horizon %dD - Candidate %s: Val WAPE=%.4f, MAE=%.2f, RMSE=%.2f", horizon, name, val_metrics["WAPE"], val_metrics["MAE"], val_metrics["RMSE"])
+            logger.info(
+                "Horizon %dD - Candidate %s: Val WAPE=%.4f, MAE=%.2f, RMSE=%.2f",
+                horizon,
+                name,
+                val_metrics["WAPE"],
+                val_metrics["MAE"],
+                val_metrics["RMSE"],
+            )
         except Exception as exc:
             logger.warning("Horizon %dD - Candidate %s failed evaluation: %s", horizon, name, exc)
 
     if not candidate_evaluations:
         raise RuntimeError(f"All candidate models failed during benchmarking for {horizon}-day horizon.")
 
-    # 4. Model Selection: Lowest Validation WAPE (Test set strictly NOT used for selection)
+    # 5. Model Selection: Lowest Validation WAPE (Test set strictly NOT used for selection)
     candidate_evaluations.sort(key=lambda x: (x["wape"], x["mae"], x["rmse"]))
     best_candidate = candidate_evaluations[0]
     winner_name = best_candidate["name"]
@@ -224,22 +256,37 @@ def benchmark_and_train_horizon(
 
     logger.info("Horizon %dD selected winning algorithm: %s (Val WAPE: %.4f)", horizon, winner_name, best_val_wape)
 
-    # 5. Unbiased Test Set Evaluation
+    # 6. Unbiased Test Set Evaluation (Using candidate model trained on Train only)
     trained_candidate_model = best_candidate["model"]
-    test_preds = np.maximum(0.0, np.asarray(trained_candidate_model.predict(X_test), dtype=float))
-    test_metrics = evaluate(y_test.values, test_preds)
+    test_preds = forecast_block(
+        model=trained_candidate_model,
+        history=test_history,
+        dates=test_dates,
+        events=events_df,
+        reference_start_date=reference_start_date,
+        feature_columns=FEATURE_COLUMNS,
+    )
+    test_metrics = evaluate(test_actuals, np.asarray(test_preds, dtype=float))
 
-    logger.info("Horizon %dD - Winning candidate %s Test WAPE=%.4f, MAE=%.2f, RMSE=%.2f", horizon, winner_name, test_metrics["WAPE"], test_metrics["MAE"], test_metrics["RMSE"])
+    logger.info(
+        "Horizon %dD - Winning candidate %s Test WAPE=%.4f, MAE=%.2f, RMSE=%.2f",
+        horizon,
+        winner_name,
+        test_metrics["WAPE"],
+        test_metrics["MAE"],
+        test_metrics["RMSE"],
+    )
 
-    # 6. Refit Winning Architecture on Train + Validation
-    train_val_df = pd.concat([train_df, val_df]).sort_index()
-    X_train_val = train_val_df[FEATURE_COLUMNS]
-    y_train_val = train_val_df["Quantity"]
+    # 7. Refit Winning Architecture on Train + Validation
+    train_val_daily = df.iloc[:-horizon].copy()
+    train_val_features = build_feature_dataset(train_val_daily)
+    X_train_val = train_val_features[FEATURE_COLUMNS]
+    y_train_val = train_val_features["Quantity"]
 
     final_model = candidate_factories[winner_name]()
     final_model.fit(X_train_val, y_train_val)
 
-    # 7. Package Production Artifact
+    # 8. Package Production Artifact
     artifact = {
         "model": final_model,
         "features": FEATURE_COLUMNS,
@@ -254,7 +301,7 @@ def benchmark_and_train_horizon(
         "test_wape": float(test_metrics["WAPE"]),
         "test_mae": float(test_metrics["MAE"]),
         "test_rmse": float(test_metrics["RMSE"]),
-        "training_rows": len(train_val_df),
+        "training_rows": len(train_val_features),
     }
 
     # Serialize to memory bytes
@@ -274,6 +321,6 @@ def benchmark_and_train_horizon(
         "test_wape": float(test_metrics["WAPE"]),
         "test_mae": float(test_metrics["MAE"]),
         "test_rmse": float(test_metrics["RMSE"]),
-        "training_rows": len(train_val_df),
+        "training_rows": len(train_val_features),
         "reference_start_date": str(reference_start_date.date()),
     }

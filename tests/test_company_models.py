@@ -27,6 +27,13 @@ from backend.app.services.storage_service import (
     storage_service,
 )
 from ml.features.feature_pipeline import FEATURE_COLUMNS, build_feature_dataset
+from ml.evaluation.recursive_forecast import (
+    extract_event_flags,
+    forecast_block,
+    recursive_forecast,
+    rolling_origin_forecast,
+    evaluate_recursive_forecast,
+)
 from ml.training.company_trainer import (
     SeasonalNaiveModel,
     benchmark_and_train_horizon,
@@ -138,16 +145,26 @@ def test_model_selection_governed_by_validation_wape():
 # --------------------------------------------------------------------------
 def test_test_set_quarantined_from_selection():
     df = create_synthetic_daily_data(days=120)
-    features = build_feature_dataset(df)
-    train_df, val_df, test_df = split_chronological(features, horizon=7)
 
-    # Corrupt test set radically
-    test_df_corrupted = test_df.copy()
-    test_df_corrupted["Quantity"] = 999999.0
+    # Corrupt test set radically in the raw daily data
+    df_corrupted = df.copy()
+    df_corrupted.loc[df_corrupted.index[-7:], "Quantity"] = 999999.0
 
-    # Ensure selection logic only reads val_df
-    result = benchmark_and_train_horizon(df, horizon=7)
-    assert result["status"] == "ready"
+    # Train on both clean and test-corrupted datasets
+    result_clean = benchmark_and_train_horizon(df, horizon=7)
+    result_corrupted = benchmark_and_train_horizon(df_corrupted, horizon=7)
+
+    assert result_clean["status"] == "ready"
+    assert result_corrupted["status"] == "ready"
+
+    # Validation metrics and winner selection must be 100% IDENTICAL
+    assert result_clean["model_type"] == result_corrupted["model_type"]
+    assert np.isclose(result_clean["validation_wape"], result_corrupted["validation_wape"])
+    assert np.isclose(result_clean["validation_mae"], result_corrupted["validation_mae"])
+    assert np.isclose(result_clean["validation_rmse"], result_corrupted["validation_rmse"])
+
+    # Test metrics MUST diverge because test set actuals were corrupted
+    assert result_clean["test_wape"] != result_corrupted["test_wape"]
 
 
 # --------------------------------------------------------------------------
@@ -968,3 +985,109 @@ def test_global_fallback_scale_divergence_warning(db_session):
     assert res.fallback_reason is not None
     assert "diverges from your dataset" in res.fallback_reason
     assert "Train company models via the Datasets page" in res.fallback_reason
+
+
+# --------------------------------------------------------------------------
+# 30. Recursive Evaluation Strictly Eliminates Target Leakage
+# --------------------------------------------------------------------------
+class MockLagPlusOneModel:
+    """Deterministic model: prediction = quantity_lag_1 + 1.0"""
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return (pd.to_numeric(X["quantity_lag_1"]) + 1.0).to_numpy(dtype=float)
+
+
+def test_recursive_evaluation_no_future_target_leakage():
+    # Constant history: 28 days of 10.0
+    history = [10.0] * 28
+    ref_date = pd.Timestamp("2024-01-01")
+    forecast_dates = pd.date_range("2024-01-29", periods=3, freq="D")
+
+    model = MockLagPlusOneModel()
+    predictions = forecast_block(
+        model=model,
+        history=history,
+        dates=forecast_dates,
+        reference_start_date=ref_date,
+    )
+
+    # Day 1: lag_1 is 10.0 -> pred = 11.0
+    # Day 2: lag_1 is predicted Day 1 (11.0) -> pred = 12.0
+    # Day 3: lag_1 is predicted Day 2 (12.0) -> pred = 13.0
+    # Proves prediction feeds into subsequent day, NOT actuals
+    assert len(predictions) == 3
+    assert np.isclose(predictions[0], 11.0)
+    assert np.isclose(predictions[1], 12.0)
+    assert np.isclose(predictions[2], 13.0)
+
+
+# --------------------------------------------------------------------------
+# 31. Rolling Origin Forecast Reveals Actuals Only Post-Block Completion
+# --------------------------------------------------------------------------
+def test_rolling_origin_forecast_reveals_actuals_after_block():
+    history = [10.0] * 28
+    ref_date = pd.Timestamp("2024-01-01")
+    test_dates = pd.date_range("2024-01-29", periods=4, freq="D")
+    test_series = pd.Series([100.0, 200.0, 300.0, 400.0], index=test_dates)
+
+    model = MockLagPlusOneModel()
+    actual, predicted = rolling_origin_forecast(
+        model=model,
+        history_series=history,
+        test_series=test_series,
+        horizon=2,
+        reference_start_date=ref_date,
+    )
+
+    # Block 1 (Day 1, 2):
+    # Day 1: lag_1 is 10.0 -> pred 11.0
+    # Day 2: lag_1 is pred Day 1 (11.0) -> pred 12.0
+    # Block 1 complete -> actuals [100.0, 200.0] revealed
+    # Block 2 (Day 3, 4):
+    # Day 3: lag_1 is revealed actual Day 2 (200.0) -> pred 201.0
+    # Day 4: lag_1 is pred Day 3 (201.0) -> pred 202.0
+    expected_preds = [11.0, 12.0, 201.0, 202.0]
+    np.testing.assert_allclose(predicted, expected_preds)
+    np.testing.assert_allclose(actual, [100.0, 200.0, 300.0, 400.0])
+
+
+# --------------------------------------------------------------------------
+# 32. Recursive Evaluation Event Normalization Helper
+# --------------------------------------------------------------------------
+def test_recursive_evaluation_handles_alternative_event_names():
+    date = pd.Timestamp("2024-05-01")
+
+    # Format A: Promotions, Holiday_Flag
+    df_a = pd.DataFrame([{"Date": "2024-05-01", "Promotions": 1, "Holiday_Flag": 0}])
+    p, h = extract_event_flags(df_a, date)
+    assert p == 1
+    assert h == 0
+
+    # Format B: Promotion, Is_Holiday
+    df_b = pd.DataFrame([{"Date": "2024-05-01", "Promotion": 1, "Is_Holiday": 1}])
+    p, h = extract_event_flags(df_b, date)
+    assert p == 1
+    assert h == 1
+
+    # Missing date -> defaults to 0, 0
+    p, h = extract_event_flags(df_b, pd.Timestamp("2024-05-02"))
+    assert p == 0
+    assert h == 0
+
+    # None -> defaults to 0, 0
+    p, h = extract_event_flags(None, date)
+    assert p == 0
+    assert h == 0
+
+
+# --------------------------------------------------------------------------
+# 33. evaluate_recursive_forecast Metric Functionality
+# --------------------------------------------------------------------------
+def test_evaluate_recursive_forecast_metrics():
+    actuals = np.array([100.0, 200.0, 300.0])
+    predictions = np.array([110.0, 190.0, 300.0])
+
+    metrics = evaluate_recursive_forecast(actuals, predictions)
+    assert "WAPE" in metrics
+    assert "MAE" in metrics
+    assert "RMSE" in metrics
+    assert np.isclose(metrics["MAE"], (10.0 + 10.0 + 0.0) / 3.0)
