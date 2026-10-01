@@ -25,6 +25,7 @@ from backend.app.schemas.datasets import (
     DatasetHistoryItem,
     DatasetHistoryResponse,
     DatasetSummaryResponse,
+    TimeSeriesQualityResponse,
 )
 from backend.app.schemas.models import TrainTriggerResponse
 from backend.app.services.company_model_service import (
@@ -35,6 +36,7 @@ from backend.app.services.company_model_service import (
 from backend.app.services.dataset_runtime_service import (
     DatasetConflictError,
     DatasetValidationError,
+    NoActiveDatasetError,
     dataset_runtime_service,
 )
 
@@ -183,6 +185,39 @@ def get_current_dataset(
 
 
 @router.get(
+    "/current/quality",
+    response_model=TimeSeriesQualityResponse,
+    summary="Get time-series continuity and data quality report for the current active dataset",
+)
+def get_current_dataset_quality(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TimeSeriesQualityResponse:
+    """Assess and return calendar continuity and quality diagnostics for the authenticated user's active dataset."""
+    try:
+        active_ds = dataset_runtime_service.get_active_dataset(db, current_user.id)
+        if not active_ds:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active dataset found for this account.",
+            )
+
+        report = dataset_runtime_service.get_dataset_quality_report(
+            user_id=current_user.id,
+            db=db,
+            dataset_id=active_ds.id,
+        )
+        data = report.to_dict()
+        data["dataset_id"] = active_ds.id
+        return TimeSeriesQualityResponse(**data)
+    except NoActiveDatasetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
     "/history",
     response_model=DatasetHistoryResponse,
     summary="List all datasets uploaded by the current user",
@@ -265,6 +300,33 @@ def activate_dataset_endpoint(
     except DatasetConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{dataset_id}/quality",
+    response_model=TimeSeriesQualityResponse,
+    summary="Get time-series continuity and data quality report for a specific dataset",
+)
+def get_dataset_quality(
+    dataset_id: str = FastPath(..., description="Unique dataset identifier"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TimeSeriesQualityResponse:
+    """Assess and return calendar continuity and quality diagnostics for a specific dataset belonging to the current user."""
+    try:
+        report = dataset_runtime_service.get_dataset_quality_report(
+            user_id=current_user.id,
+            db=db,
+            dataset_id=dataset_id,
+        )
+        data = report.to_dict()
+        data["dataset_id"] = dataset_id
+        return TimeSeriesQualityResponse(**data)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 

@@ -47,3 +47,21 @@ class DatasetActionResponse(BaseModel):
     message: str
     dataset_id: str
     status: str
+
+
+class TimeSeriesQualityResponse(BaseModel):
+    dataset_id: str | None = Field(default=None, description="Dataset identifier")
+    frequency: str = Field(default="daily", description="Detected calendar frequency")
+    min_date: str | None = Field(default=None, description="Earliest calendar date in series (YYYY-MM-DD)")
+    max_date: str | None = Field(default=None, description="Latest calendar date in series (YYYY-MM-DD)")
+    expected_days: int = Field(default=0, description="Total calendar days between min_date and max_date")
+    observed_days: int = Field(default=0, description="Days with recorded transactions")
+    missing_days: int = Field(default=0, description="Missing calendar days with no observations")
+    coverage_ratio: float = Field(default=0.0, description="Ratio of observed days to expected days")
+    duplicate_dates: int = Field(default=0, description="Count of duplicate date timestamps")
+    zero_demand_days: int = Field(default=0, description="Days explicitly observed with 0 demand")
+    missing_date_samples: list[str] = Field(default_factory=list, description="Sample of missing calendar dates (up to 10)")
+    longest_missing_gap: int = Field(default=0, description="Longest consecutive sequence of missing days")
+    is_continuous: bool = Field(default=False, description="Whether dataset has a complete daily calendar without gaps or duplicates")
+    quality_status: str = Field(default="insufficient", description="Quality tier: 'good', 'warning', or 'insufficient'")
+    warnings: list[str] = Field(default_factory=list, description="Diagnostic warnings regarding continuity and coverage")

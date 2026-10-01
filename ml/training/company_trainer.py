@@ -12,6 +12,7 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from ml.data.canonical_series import build_canonical_daily_series
 from ml.evaluation.metrics import evaluate
 from ml.evaluation.recursive_forecast import forecast_block
 from ml.features.feature_pipeline import (
@@ -147,7 +148,33 @@ def benchmark_and_train_horizon(
     validation-based candidate benchmarking (WAPE), test evaluation,
     refitting on Train + Validation, and artifact generation for a single horizon.
     """
-    is_sufficient, insufficiency_msg = check_data_sufficiency(daily_df, horizon, min_train_days)
+    canonical_df, report = build_canonical_daily_series(daily_df)
+    if not report.is_continuous:
+        sample_str = f" Sample missing dates: {', '.join(report.missing_date_samples[:5])}." if report.missing_date_samples else ""
+        gap_str = f" Longest gap: {report.longest_missing_gap} days." if report.longest_missing_gap > 0 else ""
+        msg = (
+            f"Dataset time series is discontinuous: {report.missing_days} calendar days are missing "
+            f"out of {report.expected_days} expected days (coverage ratio: {report.coverage_ratio:.1%})."
+            f"{gap_str}{sample_str} "
+            f"Forecasting models require a complete daily calendar without gaps."
+        )
+        return {
+            "horizon": horizon,
+            "status": "insufficient_data",
+            "status_message": msg,
+            "model_type": None,
+            "artifact_bytes": None,
+            "validation_wape": None,
+            "validation_mae": None,
+            "validation_rmse": None,
+            "test_wape": None,
+            "test_mae": None,
+            "test_rmse": None,
+            "training_rows": None,
+            "reference_start_date": None,
+        }
+
+    is_sufficient, insufficiency_msg = check_data_sufficiency(canonical_df, horizon, min_train_days)
     if not is_sufficient:
         return {
             "horizon": horizon,
@@ -165,17 +192,7 @@ def benchmark_and_train_horizon(
             "reference_start_date": None,
         }
 
-    # 1. Normalize Date sorting and extract reference_start_date
-    df = daily_df.copy()
-    if "Date" in df.columns:
-        df["Date"] = pd.to_datetime(df["Date"])
-        df = df.sort_values("Date").reset_index(drop=True)
-    elif isinstance(df.index, pd.DatetimeIndex):
-        df = df.sort_index().reset_index()
-        df.rename(columns={"index": "Date"}, inplace=True)
-    else:
-        raise ValueError("Input data must contain a Date column or use a DatetimeIndex.")
-
+    df = canonical_df
     raw_dates = pd.to_datetime(df["Date"])
     reference_start_date = pd.Timestamp(raw_dates.min()).normalize()
 

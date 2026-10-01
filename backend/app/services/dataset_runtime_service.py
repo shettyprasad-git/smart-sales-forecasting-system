@@ -29,6 +29,11 @@ from backend.app.database.models import (
     User,
 )
 from backend.app.schemas.datasets import DatasetSummaryResponse
+from ml.data.canonical_series import (
+    TimeSeriesQualityReport,
+    assess_time_series_quality,
+    build_canonical_daily_series,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -851,7 +856,7 @@ class DatasetRuntimeService:
             rows = db.execute(stmt).all()
             if not rows:
                 df = pd.DataFrame(
-                    columns=["Date", "Quantity", "Sales_Amount", "Profit", "Promotions", "Holiday_Flag"]
+                    columns=["Date", "Quantity", "Sales_Amount", "Profit", "Promotions", "Holiday_Flag", "is_missing"]
                 )
             else:
                 data = [
@@ -865,7 +870,8 @@ class DatasetRuntimeService:
                     }
                     for r in rows
                 ]
-                df = pd.DataFrame(data).sort_values("Date").reset_index(drop=True)
+                raw_df = pd.DataFrame(data).sort_values("Date").reset_index(drop=True)
+                df, _ = build_canonical_daily_series(raw_df)
 
             with self._lock:
                 self._cache[cache_key] = df
@@ -875,7 +881,7 @@ class DatasetRuntimeService:
         if dataset_id:
             # Explicit dataset_id not found for this user: tenant isolated empty DataFrame
             return pd.DataFrame(
-                columns=["Date", "Quantity", "Sales_Amount", "Profit", "Promotions", "Holiday_Flag"]
+                columns=["Date", "Quantity", "Sales_Amount", "Profit", "Promotions", "Holiday_Flag", "is_missing"]
             )
 
         if settings.is_production:
@@ -1025,17 +1031,47 @@ class DatasetRuntimeService:
             self._cache[cache_key] = df
         return df.copy()
 
+    def get_dataset_quality_report(
+        self,
+        user_id: int,
+        db: Session,
+        dataset_id: str | None = None,
+    ) -> TimeSeriesQualityReport:
+        """
+        Assess and return the TimeSeriesQualityReport for a specified dataset
+        or the user's current active dataset.
+        """
+        target_ds = None
+        if dataset_id:
+            target_ds = db.scalars(
+                select(DatasetUpload).where(
+                    DatasetUpload.id == dataset_id,
+                    DatasetUpload.user_id == user_id,
+                )
+            ).first()
+        else:
+            target_ds = self.get_active_dataset(db, user_id)
+
+        if not target_ds:
+            if dataset_id:
+                raise KeyError(f"Dataset '{dataset_id}' not found for current user.")
+            else:
+                raise NoActiveDatasetError("No active dataset found for this account.")
+
+        df = self.get_daily_aggregate(user_id=user_id, db=db, dataset_id=target_ds.id)
+        return assess_time_series_quality(df)
+
     def _load_fallback_daily(self) -> pd.DataFrame:
         """Load static daily dataset for development and testing."""
         if FALLBACK_DAILY_SYNTHETIC_PATH.exists():
             df = pd.read_csv(FALLBACK_DAILY_SYNTHETIC_PATH, parse_dates=["Date"])
-            df = df.sort_values("Date").reset_index(drop=True)
             if "Promotions" not in df.columns and "Promotion" in df.columns:
                 df["Promotions"] = df["Promotion"]
+            df, _ = build_canonical_daily_series(df)
             return df
         elif FALLBACK_DAILY_FEATURES_PATH.exists():
             df = pd.read_csv(FALLBACK_DAILY_FEATURES_PATH, parse_dates=["Date"])
-            df = df.sort_values("Date").reset_index(drop=True)
+            df, _ = build_canonical_daily_series(df)
             return df
         else:
             raise FileNotFoundError("Fallback daily forecasting dataset not found.")

@@ -13,6 +13,7 @@ from backend.app.services.dataset_runtime_service import (
     dataset_runtime_service,
 )
 from backend.app.services.storage_service import storage_service
+from ml.data.canonical_series import assess_time_series_quality
 from ml.features.feature_pipeline import get_feature_columns
 from ml.inference.forecast_service import (
     ForecastService as MLForecastService,
@@ -165,6 +166,18 @@ class BackendForecastService:
             )
 
         df = df.sort_values("Date").reset_index(drop=True)
+
+        # 2. Strict Calendar Continuity Check
+        quality_report = assess_time_series_quality(df)
+        if not quality_report.is_continuous:
+            sample_str = f" Sample missing dates: {', '.join(quality_report.missing_date_samples[:5])}." if quality_report.missing_date_samples else ""
+            gap_str = f" Longest missing gap: {quality_report.longest_missing_gap} days." if quality_report.longest_missing_gap > 0 else ""
+            raise ValueError(
+                f"Historical time series is discontinuous: {quality_report.missing_days} calendar days are missing "
+                f"out of {quality_report.expected_days} expected days (coverage ratio: {quality_report.coverage_ratio:.1%})."
+                f"{gap_str}{sample_str} "
+                f"Forecasting requires a continuous daily series without calendar gaps."
+            )
 
         history = pd.Series(
             df["Quantity"].astype(float).values
