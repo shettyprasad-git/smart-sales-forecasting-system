@@ -419,4 +419,3 @@ def test_quality_endpoints_end_to_end(db_session, client: TestClient):
     # 4. Test non-existent dataset returns 404
     resp_404 = client.get("/api/datasets/ds-nonexistent/quality", headers=auth_headers)
     assert resp_404.status_code == 404
-
