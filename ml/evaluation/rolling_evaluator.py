@@ -137,16 +137,21 @@ class EvaluationResult:
     predictions_df: pd.DataFrame
     origin_metrics_df: pd.DataFrame
 
-    def save(self, artifacts_dir: Path | str) -> dict[str, Path]:
+    def save(
+        self,
+        artifacts_dir: Path | str,
+        prefix: Optional[str] = None,
+    ) -> dict[str, Path]:
         """
         Persist evaluation artifacts to disk.
         """
         out_dir = Path(artifacts_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        summary_path = out_dir / "production_model_evaluation.csv"
-        predictions_path = out_dir / "production_model_predictions.csv"
-        origin_metrics_path = out_dir / "production_model_origin_metrics.csv"
+        prefix_str = f"{prefix}_" if prefix else "production_model_"
+        summary_path = out_dir / f"{prefix_str}evaluation.csv"
+        predictions_path = out_dir / f"{prefix_str}predictions.csv"
+        origin_metrics_path = out_dir / f"{prefix_str}origin_metrics.csv"
 
         self.summary_df.to_csv(summary_path, index=False)
         self.predictions_df.to_csv(predictions_path, index=False)
@@ -359,11 +364,17 @@ class RollingEvaluator:
             history_list = history_series.tolist()
 
             # Recursive forecast for the block
-            if isinstance(model, SeasonalNaiveModel):
-                block_predictions = model.forecast(
-                    history=history_list,
-                    steps=len(block_dates),
-                )
+            if hasattr(model, "forecast") and callable(getattr(model, "forecast")):
+                try:
+                    block_predictions = model.forecast(
+                        history=history_list,
+                        steps=len(block_dates),
+                    )
+                except TypeError:
+                    block_predictions = model.forecast(
+                        history_list,
+                        len(block_dates),
+                    )
             else:
                 block_predictions = forecast_block(
                     model=model,
