@@ -1,0 +1,4 @@
+horizon_days,selected_model,WAPE,MAE,RMSE,Bias,structural_risk,selection_reason
+7,Damped Holt-Winters Additive Weekly,0.0262182109828613,150.92926178895513,316.7638121053884,22.57913005712833,MEDIUM,Tied on WAPE within 0.10 pp (2.622% vs 2.622%) and MAE within 0.10 units (150.93 vs 150.93); selected by lower RMSE (316.76 vs 316.94; diff = -0.18).
+30,HistGradientBoosting,0.0293371537564896,168.8839472056461,238.84702957062945,105.90746077407456,MEDIUM,Selected by lowest WAPE (2.93% vs 4.82% for Seasonal Naive; delta = -1.89 pp).
+90,Linear Regression,0.0440777529668063,253.74052870902528,376.3029061695544,-221.2252100048326,HIGH,Selected by lowest WAPE (4.41% vs 6.23% for Damped Holt-Winters Additive Weekly; delta = -1.82 pp).

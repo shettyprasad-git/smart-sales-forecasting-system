@@ -1,0 +1,340 @@
+{
+  "selection_date": "2026-10-05T12:58:52.823569+00:00",
+  "candidate_models": {
+    "7": [
+      "Random Forest",
+      "Holt-Winters Additive Weekly",
+      "Damped Holt-Winters Additive Weekly",
+      "SARIMA(1,1,1)(0,1,1,7)",
+      "Seasonal Naive"
+    ],
+    "30": [
+      "HistGradientBoosting",
+      "Damped Holt-Winters Additive Weekly",
+      "Holt-Winters Additive Weekly",
+      "SARIMA(1,1,1)(0,1,1,7)",
+      "Seasonal Naive"
+    ],
+    "90": [
+      "Linear Regression",
+      "Damped Holt-Winters Additive Weekly",
+      "Holt-Winters Additive Weekly",
+      "SARIMA(1,1,1)(0,1,1,7)",
+      "Seasonal Naive"
+    ]
+  },
+  "selection_policy": {
+    "primary_metric": "WAPE (lower is better)",
+    "wape_tie_threshold_pp": 0.1,
+    "wape_tie_threshold_decimal": 0.001,
+    "mae_tie_threshold_units": 0.1,
+    "rmse_tie_threshold_units": 0.1,
+    "bias_tie_threshold_units": 0.1,
+    "variance_ratio_tie_threshold": 0.05,
+    "simplicity_hierarchy": {
+      "Seasonal Naive": 1,
+      "Linear Regression": 2,
+      "Holt-Winters Additive Weekly": 3,
+      "Damped Holt-Winters Additive Weekly": 4,
+      "SARIMA(1,1,1)(0,1,1,7)": 5,
+      "Random Forest": 6,
+      "HistGradientBoosting": 7
+    },
+    "structural_risk_definitions": {
+      "HIGH": [
+        "variance_ratio > 3.0 or < 0.33",
+        "abs(bias) >= 150.0",
+        "abs(lag1_acf) >= 0.90 and abs(lag7_acf) >= 0.70",
+        "outlier_pct >= 7.0%"
+      ],
+      "MEDIUM": [
+        "1.5 <= variance_ratio <= 3.0 or 0.33 <= variance_ratio <= 0.67",
+        "abs(lag1_acf) >= 0.70 or abs(lag7_acf) >= 0.50",
+        "50.0 <= abs(bias) < 150.0",
+        "3.0% <= outlier_pct < 7.0%"
+      ],
+      "LOW": [
+        "0.67 < variance_ratio < 1.5",
+        "abs(lag1_acf) < 0.70 and abs(lag7_acf) < 0.50",
+        "abs(bias) < 50.0",
+        "outlier_pct < 3.0%"
+      ]
+    }
+  },
+  "per_horizon_results": {
+    "7": {
+      "selected_model": "Damped Holt-Winters Additive Weekly",
+      "WAPE": 0.0262182109828613,
+      "MAE": 150.92926178895513,
+      "RMSE": 316.7638121053884,
+      "Bias": 22.57913005712833,
+      "structural_risk": "MEDIUM",
+      "selection_reason": "Tied on WAPE within 0.10 pp (2.622% vs 2.622%) and MAE within 0.10 units (150.93 vs 150.93); selected by lower RMSE (316.76 vs 316.94; diff = -0.18).",
+      "diagnostic_concerns": [
+        "Moderate variance expansion (VR=2.09)",
+        "Meaningful residual persistence (rho1=0.75, rho7=-0.36)",
+        "Moderate outlier frequency (6.3%)"
+      ],
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "model": "Damped Holt-Winters Additive Weekly",
+          "WAPE": 0.0262182109828613,
+          "MAE": 150.92926178895513,
+          "RMSE": 316.7638121053884,
+          "Bias": 22.57913005712833,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=2.09)",
+            "Meaningful residual persistence (rho1=0.75, rho7=-0.36)",
+            "Moderate outlier frequency (6.3%)"
+          ]
+        },
+        {
+          "rank": 2,
+          "model": "Holt-Winters Additive Weekly",
+          "WAPE": 0.0262186144438754,
+          "MAE": 150.9315843758418,
+          "RMSE": 316.94473116131684,
+          "Bias": 20.012588541715647,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=2.09)",
+            "Meaningful residual persistence (rho1=0.75, rho7=-0.36)",
+            "Moderate outlier frequency (6.3%)"
+          ]
+        },
+        {
+          "rank": 3,
+          "model": "Random Forest",
+          "WAPE": 0.0283395687185295,
+          "MAE": 163.14119178082194,
+          "RMSE": 240.36024506535335,
+          "Bias": 57.03639726027398,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Meaningful residual persistence (rho1=0.48, rho7=0.56)",
+            "Moderate bias (|Bias|=57.0)"
+          ]
+        },
+        {
+          "rank": 4,
+          "model": "SARIMA(1,1,1)(0,1,1,7)",
+          "WAPE": 0.0286594526920852,
+          "MAE": 164.982654267276,
+          "RMSE": 312.952373971142,
+          "Bias": 3.2442809437876274,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=1.78)",
+            "Meaningful residual persistence (rho1=0.76, rho7=-0.24)",
+            "Moderate outlier frequency (6.0%)"
+          ]
+        },
+        {
+          "rank": 5,
+          "model": "Seasonal Naive",
+          "WAPE": 0.0364014506134648,
+          "MAE": 209.55068493150685,
+          "RMSE": 397.1164350838412,
+          "Bias": 4.147945205479452,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=1.82)",
+            "Meaningful residual persistence (rho1=0.76, rho7=-0.40)"
+          ]
+        }
+      ]
+    },
+    "30": {
+      "selected_model": "HistGradientBoosting",
+      "WAPE": 0.0293371537564896,
+      "MAE": 168.8839472056461,
+      "RMSE": 238.84702957062945,
+      "Bias": 105.90746077407456,
+      "structural_risk": "MEDIUM",
+      "selection_reason": "Selected by lowest WAPE (2.93% vs 4.82% for Seasonal Naive; delta = -1.89 pp).",
+      "diagnostic_concerns": [
+        "Moderate bias (|Bias|=105.9)"
+      ],
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "model": "HistGradientBoosting",
+          "WAPE": 0.0293371537564896,
+          "MAE": 168.8839472056461,
+          "RMSE": 238.84702957062945,
+          "Bias": 105.90746077407456,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate bias (|Bias|=105.9)"
+          ]
+        },
+        {
+          "rank": 2,
+          "model": "Seasonal Naive",
+          "WAPE": 0.0482471753966818,
+          "MAE": 277.74246575342465,
+          "RMSE": 429.9402634517804,
+          "Bias": -20.6027397260274,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=1.93)",
+            "Meaningful residual persistence (rho1=0.73, rho7=0.30)"
+          ]
+        },
+        {
+          "rank": 3,
+          "model": "Damped Holt-Winters Additive Weekly",
+          "WAPE": 0.0486021376735858,
+          "MAE": 279.78586201913726,
+          "RMSE": 430.8063471183296,
+          "Bias": -83.03908652820213,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=1.66)",
+            "Meaningful residual persistence (rho1=0.87, rho7=0.36)",
+            "Moderate bias (|Bias|=83.0)"
+          ]
+        },
+        {
+          "rank": 4,
+          "model": "Holt-Winters Additive Weekly",
+          "WAPE": 0.0492709857589483,
+          "MAE": 283.6361913890058,
+          "RMSE": 435.2857216459396,
+          "Bias": -93.48107754688826,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Moderate variance expansion (VR=1.64)",
+            "Meaningful residual persistence (rho1=0.87, rho7=0.36)",
+            "Moderate bias (|Bias|=93.5)"
+          ]
+        },
+        {
+          "rank": 5,
+          "model": "SARIMA(1,1,1)(0,1,1,7)",
+          "WAPE": 0.0496018981485533,
+          "MAE": 285.5411406898009,
+          "RMSE": 411.99682309441056,
+          "Bias": -83.54069302536138,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Meaningful residual persistence (rho1=0.86, rho7=0.32)",
+            "Moderate bias (|Bias|=83.5)"
+          ]
+        }
+      ]
+    },
+    "90": {
+      "selected_model": "Linear Regression",
+      "WAPE": 0.0440777529668063,
+      "MAE": 253.74052870902528,
+      "RMSE": 376.3029061695544,
+      "Bias": -221.2252100048326,
+      "structural_risk": "HIGH",
+      "selection_reason": "Selected by lowest WAPE (4.41% vs 6.23% for Damped Holt-Winters Additive Weekly; delta = -1.82 pp).",
+      "diagnostic_concerns": [
+        "Extreme variance instability (VR=6.14)",
+        "Large systematic bias (|Bias|=221.2)",
+        "Severe persistent autocorrelation (rho1=0.92, rho7=0.77)"
+      ],
+      "ranked_candidates": [
+        {
+          "rank": 1,
+          "model": "Linear Regression",
+          "WAPE": 0.0440777529668063,
+          "MAE": 253.74052870902528,
+          "RMSE": 376.3029061695544,
+          "Bias": -221.2252100048326,
+          "structural_risk": "HIGH",
+          "concerns": [
+            "Extreme variance instability (VR=6.14)",
+            "Large systematic bias (|Bias|=221.2)",
+            "Severe persistent autocorrelation (rho1=0.92, rho7=0.77)"
+          ]
+        },
+        {
+          "rank": 2,
+          "model": "Damped Holt-Winters Additive Weekly",
+          "WAPE": 0.0622680232811415,
+          "MAE": 358.4556853640244,
+          "RMSE": 528.4681569029752,
+          "Bias": 81.6094114660922,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Meaningful residual persistence (rho1=0.93, rho7=0.64)",
+            "Moderate bias (|Bias|=81.6)"
+          ]
+        },
+        {
+          "rank": 3,
+          "model": "Holt-Winters Additive Weekly",
+          "WAPE": 0.0627347614843791,
+          "MAE": 361.14253735821313,
+          "RMSE": 529.6991550815009,
+          "Bias": 53.76435703237295,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Meaningful residual persistence (rho1=0.93, rho7=0.64)",
+            "Moderate bias (|Bias|=53.8)"
+          ]
+        },
+        {
+          "rank": 4,
+          "model": "Seasonal Naive",
+          "WAPE": 0.0655983780542362,
+          "MAE": 377.627397260274,
+          "RMSE": 541.7196970177347,
+          "Bias": 79.09041095890412,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Meaningful residual persistence (rho1=0.90, rho7=0.66)",
+            "Moderate bias (|Bias|=79.1)"
+          ]
+        },
+        {
+          "rank": 5,
+          "model": "SARIMA(1,1,1)(0,1,1,7)",
+          "WAPE": 0.0709997384888712,
+          "MAE": 408.721179501497,
+          "RMSE": 583.3215475934721,
+          "Bias": 42.96798843228733,
+          "structural_risk": "MEDIUM",
+          "concerns": [
+            "Meaningful residual persistence (rho1=0.94, rho7=0.70)"
+          ]
+        }
+      ]
+    }
+  },
+  "selected_models": {
+    "7": "Damped Holt-Winters Additive Weekly",
+    "30": "HistGradientBoosting",
+    "90": "Linear Regression"
+  },
+  "structural_risk_flags": {
+    "7": {
+      "level": "MEDIUM",
+      "reasons": [
+        "Moderate variance expansion (VR=2.09)",
+        "Meaningful residual persistence (rho1=0.75, rho7=-0.36)",
+        "Moderate outlier frequency (6.3%)"
+      ]
+    },
+    "30": {
+      "level": "MEDIUM",
+      "reasons": [
+        "Moderate bias (|Bias|=105.9)"
+      ]
+    },
+    "90": {
+      "level": "HIGH",
+      "reasons": [
+        "Extreme variance instability (VR=6.14)",
+        "Large systematic bias (|Bias|=221.2)",
+        "Severe persistent autocorrelation (rho1=0.92, rho7=0.77)"
+      ]
+    }
+  }
+}
