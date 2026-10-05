@@ -1,0 +1,63 @@
+{
+  "selection_cutoff": "2024-12-31",
+  "candidate_orders": [
+    [
+      0,
+      1,
+      0
+    ],
+    [
+      0,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      0
+    ],
+    [
+      1,
+      1,
+      1
+    ],
+    [
+      2,
+      1,
+      0
+    ],
+    [
+      0,
+      1,
+      2
+    ],
+    [
+      2,
+      1,
+      1
+    ],
+    [
+      1,
+      1,
+      2
+    ],
+    [
+      2,
+      1,
+      2
+    ]
+  ],
+  "selected_order": [
+    2,
+    1,
+    2
+  ],
+  "selection_metric": "AIC",
+  "selected_aic": 35857.65039045973,
+  "selected_bic": 35886.82630923606,
+  "selected_log_likelihood": -17923.825195229863,
+  "selected_converged": true,
+  "training_observations": 2529,
+  "training_start_date": "2018-01-29",
+  "training_end_date": "2024-12-31"
+}
