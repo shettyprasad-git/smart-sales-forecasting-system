@@ -1,0 +1,22 @@
+{
+  "selection_cutoff": "2024-12-31",
+  "selected_order": [
+    1,
+    1,
+    1
+  ],
+  "selected_seasonal_order": [
+    0,
+    1,
+    1,
+    7
+  ],
+  "seasonal_period": 7,
+  "selection_metric": "AIC",
+  "selected_aic": 32519.86563154473,
+  "selected_bic": 32543.18096965508,
+  "candidate_count": 16,
+  "training_observations": 2529,
+  "training_start_date": "2018-01-29",
+  "training_end_date": "2024-12-31"
+}
